@@ -1,0 +1,17 @@
+{
+  "name": "cadence",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "web": "npm run dev --workspace @cadence/web",
+    "build:web": "npm run build --workspace @cadence/web",
+    "test": "node --test \"packages/*/test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
