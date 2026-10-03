@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { getLevel, usePlayer } from '@/lib/audio.js';
+import { getLevel, useIsPlaying, usePlayer } from '@/lib/audio.js';
+import { useStore } from '@/lib/store.jsx';
 import { Icon } from './Icon.jsx';
 
 /**
@@ -44,20 +45,35 @@ export function Orb({ voice, size = 40, className = '' }) {
 /**
  * An orb that is also the voice's play button.
  *
- * @param {{voice: any, size?: number, onPlay: () => void, playing: boolean}} props
+ * @param {{voice: any, size?: number, onPlay: () => void, playing: boolean, loading?: boolean}} props
  */
-export function OrbPlay({ voice, size = 40, onPlay, playing }) {
+export function OrbPlay({ voice, size = 40, onPlay, playing, loading = false }) {
   return (
     <button
       type="button"
-      className={`orb-play${playing ? ' playing' : ''}`}
+      className={`orb-play${playing ? ' playing' : ''}${loading ? ' loading' : ''}`}
+      aria-busy={loading}
       onClick={(e) => { e.stopPropagation(); onPlay(); }}
       aria-label={playing ? `Pause ${voice.name}` : `Play ${voice.name} preview`}
     >
       <Orb voice={voice} size={size} />
       <span className="orb-icon">
-        <Icon name={playing ? 'pause' : 'play'} size={Math.round(size * 0.38)} />
+        {loading
+          ? <span className="spinner" style={{ width: Math.round(size * 0.42), height: Math.round(size * 0.42) }} />
+          : <Icon name={playing ? 'pause' : 'play'} size={Math.round(size * 0.38)} />}
       </span>
     </button>
   );
+}
+
+/**
+ * A voice's orb wired to its audition sample, with a spinner while the sample
+ * is rendered for the first time.
+ *
+ * @param {{voice: import('@cadence/engine').Voice, size?: number}} props
+ */
+export function PreviewOrb({ voice, size = 40 }) {
+  const { previewVoice, previewing } = useStore();
+  const playing = useIsPlaying(`preview:${voice.id}`);
+  return <OrbPlay voice={voice} size={size} playing={playing} loading={previewing === voice.id} onPlay={() => previewVoice(voice)} />;
 }

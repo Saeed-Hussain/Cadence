@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { MODELS } from '@cadence/engine';
-import { Segmented, Slider, Switch } from '@/components/Controls.jsx';
+import { Segmented, Slider } from '@/components/Controls.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { OrbPlay } from '@/components/Orb.jsx';
 import { VoicePicker } from '@/components/VoicePicker.jsx';
@@ -24,7 +24,7 @@ const STARTERS = [
 
 export default function TextToSpeech() {
   const {
-    voiceId, setVoiceId, settings, setSettings, generate, generating,
+    voiceId, setVoiceId, settings, setSettings, generate, generating, stop,
     engineState, engine, setModel, history, playEntry, toast,
   } = useStore();
   const [text, setText] = useState('');
@@ -107,15 +107,18 @@ export default function TextToSpeech() {
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setText('')}>Clear</button>
             )}
             <span style={{ flex: 1 }} />
-            <span className="faint" style={{ fontSize: 12 }}>{loading ? `Model loading · ${Math.round(engineState.progress * 100)}%` : 'Ctrl ↵'}</span>
-            <button
-              type="button"
-              className={`btn btn-primary${generating ? ' working' : ''}`}
-              onClick={run}
-              disabled={!canGo}
-            >
-              {generating ? 'Generating…' : 'Generate speech'}
-            </button>
+            <span className="faint" style={{ fontSize: 12 }}>
+              {engineState.status === 'error' ? 'Model failed to load' : loading ? (engineState.phase === 'init' ? 'Starting model…' : `Downloading model · ${Math.round(engineState.progress * 100)}%`) : 'Ctrl ↵'}
+            </span>
+            {generating ? (
+              <button type="button" className="btn btn-primary working" onClick={stop}>
+                <Icon name="stop" size={13} /> Stop
+              </button>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={run} disabled={!canGo}>
+                Generate speech
+              </button>
+            )}
           </div>
         </section>
 
@@ -157,16 +160,10 @@ export default function TextToSpeech() {
 
                 <Slider label="Speed" value={settings.speed} min={0.7} max={1.2} step={0.01}
                   left="Slower" right="Faster" format={(v) => `${v.toFixed(2)}×`} onChange={(speed) => patch({ speed })} />
-                <Slider label="Stability" value={settings.stability}
-                  left="More variable" right="More stable" onChange={(stability) => patch({ stability })} />
-                <Slider label="Similarity" value={settings.similarity}
-                  left="Low" right="High" onChange={(similarity) => patch({ similarity })} />
-                <Slider label="Style exaggeration" value={settings.style}
-                  left="None" right="Exaggerated" onChange={(style) => patch({ style })} />
-                <div className="toggle-row">
-                  <span>Speaker boost</span>
-                  <Switch label="Speaker boost" checked={settings.boost} onChange={(boost) => patch({ boost })} />
-                </div>
+                <p className="faint" style={{ fontSize: 12, marginTop: -10 }}>
+                  Stability, similarity and style controls arrive with Cadence&apos;s own model. The reference weights
+                  take only speed, and a control that does nothing would be lying to you.
+                </p>
 
                 {last && (
                   <div className="field">

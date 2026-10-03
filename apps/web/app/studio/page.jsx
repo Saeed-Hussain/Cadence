@@ -11,17 +11,20 @@ import { useStore } from '@/lib/store.jsx';
 
 /** @typedef {{id: string, voiceId: string, text: string}} Block */
 
-const KEY = 'cadence:studio';
+const KEY = 'cadence:studio:v2';
 const GAP_SECONDS = 0.35;
 const RATE = 24000;
+
+const NARRATOR = 'bf_emma';
+const SAILOR = 'am_fenrir';
 
 const SAMPLE = {
   title: 'The Lighthouse — Chapter One',
   blocks: [
-    { id: 'b1', voiceId: VOICES[2].id, text: 'The lighthouse keeper had not seen a ship in eleven years.' },
-    { id: 'b2', voiceId: VOICES[2].id, text: 'So when the lamp caught a sail on the horizon, she did not believe it.' },
-    { id: 'b3', voiceId: VOICES[1].id, text: 'Ahoy! Is anyone up there? We need the light — the fog is closing in!' },
-    { id: 'b4', voiceId: VOICES[2].id, text: 'She climbed the hundred and twelve steps, and for the first time in eleven years, she answered.' },
+    { id: 'b1', voiceId: NARRATOR, text: 'The lighthouse keeper had not seen a ship in eleven years.' },
+    { id: 'b2', voiceId: NARRATOR, text: 'So when the lamp caught a sail on the horizon, she did not believe it.' },
+    { id: 'b3', voiceId: SAILOR, text: 'Ahoy! Is anyone up there? We need the light — the fog is closing in!' },
+    { id: 'b4', voiceId: NARRATOR, text: 'She climbed the hundred and twelve steps, and for the first time in eleven years, she answered.' },
   ],
 };
 

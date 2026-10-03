@@ -3,11 +3,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { useIsPlaying } from '@/lib/audio.js';
 import { cap } from '@/lib/format.js';
 import { useStore } from '@/lib/store.jsx';
 import { Icon } from './Icon.jsx';
-import { Orb, OrbPlay } from './Orb.jsx';
+import { Orb, PreviewOrb } from './Orb.jsx';
 import { Segmented } from './Controls.jsx';
 
 /** @typedef {import('@cadence/engine').Voice} Voice */
@@ -38,7 +37,7 @@ export function VoicePicker({ value, onChange, variant = 'full' }) {
           <>
             <span className="grow">
               <b>{voice?.name ?? 'Choose a voice'}</b>
-              <span>{voice ? `${cap(voice.gender)} · ${voice.accent} · ${voice.category}` : ''}</span>
+              <span>{voice ? `${cap(voice.gender)} · ${voice.accent} · ${voice.kind === 'original' ? 'Original' : voice.kind === 'blend' ? 'Blend' : 'Yours'}` : ''}</span>
             </span>
             <Icon name="chevronDown" size={16} className="faint" />
           </>
@@ -105,7 +104,7 @@ function PickerPanel({ anchor, value, onPick, onClose }) {
     const needle = q.trim().toLowerCase();
     const pool = scope === 'mine' && !needle ? voices.filter((v) => favorites.includes(v.id)) : voices;
     return needle
-      ? pool.filter((v) => `${v.name} ${v.accent} ${v.gender} ${v.category} ${v.tags.join(' ')}`.toLowerCase().includes(needle))
+      ? pool.filter((v) => `${v.name} ${v.accent} ${v.gender} ${v.kind} ${v.tags.join(' ')}`.toLowerCase().includes(needle))
       : pool;
   }, [q, scope, voices, favorites]);
 
@@ -140,7 +139,7 @@ function PickerPanel({ anchor, value, onPick, onClose }) {
           <input
             ref={input}
             className="input"
-            placeholder="Search 200+ voices…"
+            placeholder={`Search ${voices.length} voices…`}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onKey}
@@ -180,8 +179,6 @@ function PickerPanel({ anchor, value, onPick, onClose }) {
 
 /** @param {{voice: Voice, selected: boolean, hot: boolean, onPick: (v: Voice) => void, onHover: () => void}} props */
 function PickerRow({ voice, selected, hot, onPick, onHover }) {
-  const { previewVoice } = useStore();
-  const playing = useIsPlaying(`preview:${voice.id}`);
   return (
     <div
       className={`menu-item${hot ? ' hot' : ''}${selected ? ' on' : ''}`}
@@ -191,11 +188,11 @@ function PickerRow({ voice, selected, hot, onPick, onHover }) {
       onMouseEnter={onHover}
       style={{ cursor: 'pointer' }}
     >
-      <OrbPlay voice={voice} size={34} playing={playing} onPlay={() => previewVoice(voice)} />
+      <PreviewOrb voice={voice} size={34} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <b style={{ display: 'block', fontSize: 13.5, fontWeight: 600 }}>{voice.name}</b>
         <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {cap(voice.gender)} · {voice.accent} · {voice.tags.join(', ')}
+          {cap(voice.gender)} · {voice.accent} · {voice.grade} · {voice.tags.join(', ')}
         </span>
       </span>
       {selected && <Icon name="check" size={16} />}

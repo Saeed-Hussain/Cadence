@@ -57,7 +57,7 @@ export default function Engine() {
           <p className="sub">What is running, on what hardware, and how fast — measured live in this tab.</p>
         </div>
         <span className="tag warn" style={{ height: 28, padding: '0 12px', fontSize: 12.5 }}>
-          <Icon name="info" size={14} /> &nbsp;Stub backend — hand-written kernels land at M2
+          <Icon name="info" size={14} /> &nbsp;Reference weights on ONNX Runtime Web — hand-written kernels replace it at M2
         </span>
       </div>
 
@@ -103,7 +103,7 @@ export default function Engine() {
           <Capability icon="cpu" label="CPU · WASM SIMD" value={threads ? `${threads} threads` : '…'} ok />
           <Capability icon="zap" label="GPU · WebGPU" value={gpu === null ? '…' : gpu ? 'Available' : 'Not available'} ok={!!gpu} />
           <Capability icon="layers" label="Threads · SharedArrayBuffer" value={isolated === null ? '…' : isolated ? 'Cross-origin isolated' : 'Single-thread fallback'} ok={!!isolated} />
-          <Capability icon="voices" label="Voice library" value={`${VOICES.length} voices`} ok />
+          <Capability icon="voices" label="Voice library" value={`${VOICES.length} voices · ${VOICES.filter((v) => v.kind === 'original').length} originals + blends`} ok />
         </div>
       </div>
 
@@ -126,7 +126,7 @@ export default function Engine() {
               </div>
               <p className="muted" style={{ fontSize: 13 }}>{m.description}</p>
               {active && engineState.status !== 'ready' && <div className="bar"><i style={{ width: `${engineState.progress * 100}%` }} /></div>}
-              <div className="faint mono" style={{ fontSize: 12 }}>{m.sizeMb} MB weights · {m.backend === 'cpu' ? 'int8 quantised' : 'fp16'}</div>
+              <div className="faint mono" style={{ fontSize: 12 }}>Kokoro-82M · {m.sizeMb} MB weights · {m.dtype === 'q8' ? 'int8 quantised' : 'fp32'} · downloaded once, then cached</div>
             </div>
           );
         })}

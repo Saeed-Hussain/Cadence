@@ -771,7 +771,18 @@ input[type='range']:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px 
   -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
 }
-.orb-play:hover .orb-icon, .orb-play.playing .orb-icon, .orb-play:focus-visible .orb-icon { opacity: 1; transform: none; }
+.orb-play:hover .orb-icon, .orb-play.playing .orb-icon, .orb-play.loading .orb-icon, .orb-play:focus-visible .orb-icon { opacity: 1; transform: none; }
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ─── Cards ────────────────────────────────────────────────────────────── */
 

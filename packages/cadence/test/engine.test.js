@@ -1,29 +1,33 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEngine, VOICES, encodeWav, SAMPLE_RATE } from '../src/index.js';
-import { estimatePitch, render } from '../src/stub.js';
+import { VOICES, ORIGINAL_IDS, encodeWav, estimatePitch, matchPitch } from '../src/index.js';
 
-test('library has 200+ unique voices', () => {
-  assert.ok(VOICES.length >= 200);
+test('library has 200+ unique voices built on the 28 originals', () => {
+  assert.ok(VOICES.length >= 200, `${VOICES.length}`);
   assert.equal(new Set(VOICES.map((v) => v.id)).size, VOICES.length);
+  assert.equal(new Set(VOICES.map((v) => v.name)).size, VOICES.length, 'names are unique');
+  assert.equal(ORIGINAL_IDS.length, 28);
+  for (const v of VOICES) {
+    assert.ok(v.mix.length >= 1);
+    for (const [id, w] of v.mix) assert.ok(ORIGINAL_IDS.includes(id) && w > 0, `${v.id}: ${id}`);
+    assert.ok(Math.abs(v.mix.reduce((s, [, w]) => s + w, 0) - 1) < 0.01, `${v.id} weights sum to 1`);
+  }
 });
 
-test('synthesis is finite, bounded, and deterministic', async () => {
-  const engine = createEngine();
-  const req = { text: 'Hello there. How are you today?', voice: VOICES[0] };
-  const a = await engine.synthesize(req);
-  const b = await engine.synthesize(req);
-  assert.ok(a.samples.length > SAMPLE_RATE * 0.5);
-  assert.ok(a.samples.every((x) => Number.isFinite(x) && Math.abs(x) <= 1));
-  assert.deepEqual(a.samples, b.samples);
-  assert.ok(a.stats.rtf > 0);
+test('blends never mix genders', () => {
+  for (const v of VOICES) for (const [id] of v.mix) assert.equal(id[1] === 'f', v.gender === 'female', v.id);
 });
 
-test('pitch estimate recovers the voice it was rendered with', () => {
-  for (const pitch of [110, 210]) {
-    const s = render('aaaa oooo aaaa', { pitch, brightness: 1, breath: 0, pace: 1 });
-    const est = estimatePitch(s, SAMPLE_RATE);
-    assert.ok(Math.abs(est - pitch) / pitch < 0.15, `${pitch} -> ${est}`);
+test('pitch matching picks the right side of the voice range', () => {
+  assert.equal(matchPitch(210).gender, 'female');
+  assert.equal(matchPitch(100).gender, 'male');
+});
+
+test('pitch estimate recovers a pure tone', () => {
+  for (const f of [110, 210]) {
+    const s = new Float32Array(24000).map((_, i) => Math.sin((2 * Math.PI * f * i) / 24000) + 0.4 * Math.sin((4 * Math.PI * f * i) / 24000));
+    const est = estimatePitch(s, 24000);
+    assert.ok(Math.abs(est - f) / f < 0.05, `${f} -> ${est}`);
   }
 });
 

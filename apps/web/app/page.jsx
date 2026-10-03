@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { VOICES } from '@cadence/engine';
 import { Icon } from '@/components/Icon.jsx';
-import { Orb, OrbPlay } from '@/components/Orb.jsx';
+import { Orb, OrbPlay, PreviewOrb } from '@/components/Orb.jsx';
 import { useIsPlaying } from '@/lib/audio.js';
 import { ago, cap } from '@/lib/format.js';
 import { useStore } from '@/lib/store.jsx';
@@ -12,14 +12,15 @@ import { useStore } from '@/lib/store.jsx';
 const TOOLS = [
   { href: '/text-to-speech', icon: 'speech', title: 'Text to Speech', body: 'Type anything and hear it in any of 200+ voices, instantly.', tone: '#6b5cff' },
   { href: '/voices', icon: 'voices', title: 'Voice Library', body: 'Browse, audition and save voices — before the model even loads.', tone: '#0ea5e9' },
-  { href: '/voice-cloning', icon: 'mic', title: 'Voice Cloning', body: 'Ten seconds of audio in, a new voice out. Never leaves your machine.', tone: '#ec4899' },
+  { href: '/voice-cloning', icon: 'mic', title: 'Your Voice', body: 'Record a few seconds and find the library voice that fits you.', tone: '#ec4899' },
   { href: '/studio', icon: 'studio', title: 'Studio', body: 'Long-form narration with a different voice on every line.', tone: '#f59e0b' },
 ];
 
-const FEATURED = [0, 3, 8, 13, 21, 34, 55, 89].map((i) => VOICES[i]);
+// The best-graded originals first, then a few blends to show the range.
+const FEATURED = [...VOICES.filter((v) => v.kind === 'original').slice(0, 5), ...VOICES.filter((v) => v.kind === 'blend').slice(0, 3)];
 
 export default function Home() {
-  const { history, engineState, engine, playEntry, previewVoice } = useStore();
+  const { history, engineState, engine, playEntry } = useStore();
   const [greeting, setGreeting] = useState('Welcome');
   useEffect(() => {
     const h = new Date().getHours();
@@ -36,7 +37,7 @@ export default function Home() {
         <div>
           <span className="eyebrow">
             <span className={`dot${ready ? '' : ' loading'}`} style={{ margin: '0 2px 0 4px' }} />
-            {ready ? `${engine.model.name} is ready — running on this device` : `Loading ${engine.model.name} · ${Math.round(engineState.progress * 100)}%`}
+            {ready ? `${engine.model.name} is ready — running on this device` : engineState.status === 'error' ? 'The model could not be downloaded — check your connection' : engineState.phase === 'init' ? `Starting ${engine.model.name}…` : `Downloading ${engine.model.name} · ${Math.round(engineState.progress * 100)}% · once, then cached`}
           </span>
           <h1>{greeting}.<br />What should we say today?</h1>
           <p>
@@ -74,7 +75,7 @@ export default function Home() {
         <Link href="/voices">View all <Icon name="chevronRight" size={14} /></Link>
       </div>
       <div className="rail stagger">
-        {FEATURED.map((v) => <FeaturedVoice key={v.id} voice={v} onPlay={() => previewVoice(v)} />)}
+        {FEATURED.map((v) => <FeaturedVoice key={v.id} voice={v} />)}
       </div>
 
       <div className="grid grid-3" style={{ marginTop: 20 }}>
@@ -115,13 +116,12 @@ export default function Home() {
   );
 }
 
-/** @param {{voice: import('@cadence/engine').Voice, onPlay: () => void}} props */
-function FeaturedVoice({ voice, onPlay }) {
-  const playing = useIsPlaying(`preview:${voice.id}`);
+/** @param {{voice: import('@cadence/engine').Voice}} props */
+function FeaturedVoice({ voice }) {
   return (
     <div className="glass voice-card card-hover">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <OrbPlay voice={voice} size={46} playing={playing} onPlay={onPlay} />
+        <PreviewOrb voice={voice} size={46} />
         <div style={{ minWidth: 0 }}>
           <b>{voice.name}</b>
           <div className="faint" style={{ fontSize: 12 }}>{cap(voice.gender)} · {voice.accent}</div>
@@ -129,7 +129,8 @@ function FeaturedVoice({ voice, onPlay }) {
       </div>
       <p>{voice.description}</p>
       <div style={{ display: 'flex', gap: 6 }}>
-        <span className="tag">{voice.category}</span>
+        <span className="tag mono">{voice.grade}</span>
+        <span className="tag">{voice.kind === 'original' ? 'Original' : 'Blend'}</span>
         <span className="tag">{voice.tags[0]}</span>
       </div>
     </div>

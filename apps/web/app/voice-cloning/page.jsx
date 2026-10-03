@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon.jsx';
-import { OrbPlay } from '@/components/Orb.jsx';
+import { PreviewOrb } from '@/components/Orb.jsx';
 import { player, useIsPlaying } from '@/lib/audio.js';
 import { clock } from '@/lib/format.js';
 import { useStore } from '@/lib/store.jsx';
@@ -59,7 +59,7 @@ export default function VoiceCloning() {
     setName('');
     setDescription('');
     setConsent(false);
-    toast(`${voice.name} is ready — added to My voices`);
+    toast(`${voice.name} is ready — matched from your recording`);
     previewVoice(voice);
   };
 
@@ -68,7 +68,7 @@ export default function VoiceCloning() {
       <div className="page-head">
         <div>
           <h1>Voice Cloning</h1>
-          <p className="sub">Create a voice from a short recording. The audio is analysed on this device and never uploaded anywhere.</p>
+          <p className="sub">Record a few seconds and Cadence finds the voice that fits yours, blended from the library. True cloning arrives with the Cadence Clone model. Your audio never leaves this device.</p>
         </div>
       </div>
 
@@ -129,13 +129,12 @@ export default function VoiceCloning() {
             <span className="box"><Icon name="check" size={13} strokeWidth={2.6} /></span>
             <span>
               I confirm this is my own voice, or I have the explicit permission of the person speaking to create a voice from it.
-              Every clip Cadence produces carries an inaudible watermark.
             </span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button type="button" className={`btn btn-primary btn-lg${busy ? ' working' : ''}`} disabled={!ready} onClick={create}>
-              <Icon name="wand" size={17} /> {busy ? 'Analysing voice…' : 'Create voice'}
+              <Icon name="wand" size={17} /> {busy ? 'Matching your voice…' : 'Find my voice'}
             </button>
           </div>
         </section>
@@ -144,9 +143,9 @@ export default function VoiceCloning() {
           <div className="glass card" style={{ display: 'grid', gap: 16 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600 }}>For the best clone</h3>
             <ol className="steps">
-              <li><div><b>Record 10–60 seconds</b>More audio gives the speaker encoder more to work with.</div></li>
+              <li><div><b>Record 10 seconds or more</b>Longer recordings give a steadier pitch measurement.</div></li>
               <li><div><b>One voice, no music</b>Background sound gets cloned too. A quiet room beats a good mic.</div></li>
-              <li><div><b>Speak naturally</b>The clone copies delivery as well as timbre — read like you talk.</div></li>
+              <li><div><b>Speak naturally</b>Read like you talk, at your normal pitch, not your reading voice.</div></li>
             </ol>
           </div>
 
@@ -157,15 +156,15 @@ export default function VoiceCloning() {
             <div>
               <b style={{ fontSize: 13.5 }}>Private by construction</b>
               <p className="muted" style={{ fontSize: 12.5, marginTop: 3 }}>
-                Cloning runs the reference audio through the speaker encoder on your GPU. There is no server to send it to.
+                Your recording is analysed in this tab. There is no server to send it to.
               </p>
             </div>
           </div>
 
           <div className="glass card" style={{ display: 'grid', gap: 10 }}>
-            <div className="field-label"><span>Your cloned voices</span><span className="faint">{custom.length}</span></div>
+            <div className="field-label"><span>Your voices</span><span className="faint">{custom.length}</span></div>
             {custom.length === 0 && <p className="faint" style={{ fontSize: 12.5 }}>Voices you create appear here and in My voices.</p>}
-            {custom.map((v) => <ClonedRow key={v.id} voice={v} onPlay={() => previewVoice(v)} onRemove={() => { removeClone(v.id); toast(`Deleted ${v.name}`); }} />)}
+            {custom.map((v) => <ClonedRow key={v.id} voice={v} onRemove={() => { removeClone(v.id); toast(`Deleted ${v.name}`); }} />)}
             {custom.length > 0 && <Link href="/text-to-speech" className="btn btn-soft btn-sm" style={{ justifySelf: 'start' }}>Use in Text to Speech <Icon name="arrowRight" size={14} /></Link>}
           </div>
         </aside>
@@ -281,15 +280,14 @@ function SampleRow({ sample, onRemove }) {
   );
 }
 
-/** @param {{voice: import('@cadence/engine').Voice, onPlay: () => void, onRemove: () => void}} props */
-function ClonedRow({ voice, onPlay, onRemove }) {
-  const playing = useIsPlaying(`preview:${voice.id}`);
+/** @param {{voice: import('@cadence/engine').Voice, onRemove: () => void}} props */
+function ClonedRow({ voice, onRemove }) {
   return (
     <div className="cast-row">
-      <OrbPlay voice={voice} size={34} playing={playing} onPlay={onPlay} />
+      <PreviewOrb voice={voice} size={34} />
       <div className="grow">
         <b style={{ display: 'block' }}>{voice.name}</b>
-        <span className="faint" style={{ fontSize: 12 }}>{voice.pitch} Hz · {voice.gender}</span>
+        <span className="faint" style={{ fontSize: 12 }}>{voice.pitch} Hz · {voice.description.split(': ')[1] ?? voice.gender}</span>
       </div>
       <button type="button" className="icon-btn sm" onClick={onRemove} aria-label={`Delete ${voice.name}`}><Icon name="trash" size={15} /></button>
     </div>

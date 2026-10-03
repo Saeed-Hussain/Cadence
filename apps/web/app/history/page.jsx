@@ -13,7 +13,7 @@ import { useStore } from '@/lib/store.jsx';
 /** @typedef {import('@/lib/store.jsx').HistoryEntry} HistoryEntry */
 
 export default function History() {
-  const { history, setHistory, toast } = useStore();
+  const { history, clearHistory, toast } = useStore();
   const [q, setQ] = useState('');
   const [source, setSource] = useState(/** @type {'all' | 'tts' | 'studio'} */ ('all'));
   const [confirming, setConfirming] = useState(false);
@@ -45,7 +45,7 @@ export default function History() {
               <>
                 <span className="muted" style={{ fontSize: 13 }}>Delete all {history.length}?</span>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirming(false)}>Cancel</button>
-                <button type="button" className="btn btn-soft btn-sm btn-danger" onClick={() => { setHistory([]); setConfirming(false); toast('History cleared'); }}>Delete all</button>
+                <button type="button" className="btn btn-soft btn-sm btn-danger" onClick={() => { clearHistory(); setConfirming(false); toast('History cleared'); }}>Delete all</button>
               </>
             ) : (
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirming(true)}><Icon name="trash" size={15} /> Clear history</button>

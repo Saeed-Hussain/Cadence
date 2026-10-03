@@ -182,7 +182,7 @@ function EnginePill() {
       )}
       <span className="engine-meta">
         <b>{engine.model.name}</b>
-        <span>{loading ? `Loading model · ${pct}%` : `Ready · on-device · ${engine.model.backend.toUpperCase()}`}</span>
+        <span>{loading ? (engineState.phase === 'init' ? 'Starting model…' : `Downloading · ${pct}%`) : `Ready · on-device · ${engine.model.backend.toUpperCase()}`}</span>
       </span>
     </Link>
   );
