@@ -2,3 +2,6 @@ node_modules
 .next
 out
 *.log
+
+# Downloaded model weights and benchmark audio, never committed.
+.cache/
