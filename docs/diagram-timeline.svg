@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 318" width="760" height="318" role="img" aria-label="Cadence schedule: Phase 1 engine over eighteen weeks, Phase 2 training to week forty-four">
+<rect x="0" y="0" width="760" height="318" fill="#ffffff"/>
+<line x1="288.0" y1="34" x2="288.0" y2="304" stroke="#eceef2"/>
+<text x="288.0" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w0</text>
+<line x1="329.1" y1="34" x2="329.1" y2="304" stroke="#eceef2"/>
+<text x="329.1" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w4</text>
+<line x1="370.2" y1="34" x2="370.2" y2="304" stroke="#eceef2"/>
+<text x="370.2" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w8</text>
+<line x1="411.3" y1="34" x2="411.3" y2="304" stroke="#eceef2"/>
+<text x="411.3" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w12</text>
+<line x1="452.4" y1="34" x2="452.4" y2="304" stroke="#eceef2"/>
+<text x="452.4" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w16</text>
+<line x1="493.5" y1="34" x2="493.5" y2="304" stroke="#eceef2"/>
+<text x="493.5" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w20</text>
+<line x1="534.5" y1="34" x2="534.5" y2="304" stroke="#eceef2"/>
+<text x="534.5" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w24</text>
+<line x1="575.6" y1="34" x2="575.6" y2="304" stroke="#eceef2"/>
+<text x="575.6" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w28</text>
+<line x1="616.7" y1="34" x2="616.7" y2="304" stroke="#eceef2"/>
+<text x="616.7" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w32</text>
+<line x1="657.8" y1="34" x2="657.8" y2="304" stroke="#eceef2"/>
+<text x="657.8" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w36</text>
+<line x1="698.9" y1="34" x2="698.9" y2="304" stroke="#eceef2"/>
+<text x="698.9" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w40</text>
+<line x1="740.0" y1="34" x2="740.0" y2="304" stroke="#eceef2"/>
+<text x="740.0" y="28.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="8.5" font-weight="400" fill="#5a6070">w44</text>
+<line x1="472.9" y1="12" x2="472.9" y2="304" stroke="#1f4f8f" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="380.5" y="10.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="600" fill="#1f4f8f">PHASE 1 — THE ENGINE</text>
+<text x="606.5" y="10.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="600" fill="#6b7688">PHASE 2 — THE WEIGHTS</text>
+<text x="276.0" y="52.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Prototype and real-time-factor spike</text>
+<rect x="288.0" y="40" width="20.5" height="17" rx="3" fill="#1f4f8f"/>
+<text x="276.0" y="74.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Text front end — normalisation, G2P</text>
+<rect x="298.3" y="62" width="51.4" height="17" rx="3" fill="#1f4f8f"/>
+<text x="276.0" y="96.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">CPU kernels — SIMD GEMM, int8, threads</text>
+<rect x="308.5" y="84" width="82.2" height="17" rx="3" fill="#1f4f8f"/>
+<text x="276.0" y="118.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Vocoder kernels</text>
+<rect x="349.6" y="106" width="61.6" height="17" rx="3" fill="#1f4f8f"/>
+<text x="276.0" y="140.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Acoustic model and streaming worklet</text>
+<rect x="370.2" y="128" width="61.6" height="17" rx="3" fill="#1f4f8f"/>
+<text x="276.0" y="162.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">GPU backend — WGSL operator set</text>
+<rect x="390.7" y="150" width="61.6" height="17" rx="3" fill="#1f4f8f"/>
+<text x="276.0" y="184.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Voice library — curation and labelling</text>
+<rect x="411.3" y="172" width="61.6" height="17" rx="3" fill="#1f4f8f"/>
+<text x="276.0" y="206.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Cloning path, editor, public release</text>
+<rect x="431.8" y="194" width="41.1" height="17" rx="3" fill="#1f4f8f"/>
+<text x="276.0" y="228.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Data pipeline and corpus preparation</text>
+<rect x="472.9" y="216" width="61.6" height="17" rx="3" fill="#98a4b6"/>
+<text x="276.0" y="250.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Train the vocoder</text>
+<rect x="514.0" y="238" width="82.2" height="17" rx="3" fill="#98a4b6"/>
+<text x="276.0" y="272.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Train the acoustic model</text>
+<rect x="575.6" y="260" width="123.3" height="17" rx="3" fill="#98a4b6"/>
+<text x="276.0" y="294.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Voice design and speech-to-speech</text>
+<rect x="657.8" y="282" width="82.2" height="17" rx="3" fill="#98a4b6"/>
+</svg>

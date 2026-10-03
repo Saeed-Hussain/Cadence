@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 436" width="760" height="436" role="img" aria-label="Cadence architecture: a five-stage synthesis pipeline over one kernel interface with a CPU and a GPU backend, fed by a library of more than two hundred built-in voices">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8b93a3"/></marker></defs>
+<rect x="0" y="0" width="760" height="436" fill="#ffffff"/>
+<text x="88.0" y="30.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="600" fill="#5a6070">DEMO</text>
+<rect x="100" y="8" width="651" height="36" rx="5" fill="#ffffff" stroke="#d9dce3" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="425.5" y="30.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="10.5" font-weight="600" fill="#16181d">apps/web  ·  voice picker with samples  ·  playground  ·  long-form editor  ·  live RTF meter</text>
+<text x="88.0" y="82.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="600" fill="#5a6070">PIPELINE</text>
+<rect x="100" y="62" width="115" height="56" rx="5" fill="#f7f8fa" stroke="#d9dce3" stroke-width="1"/>
+<text x="157.5" y="89.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="11.5" font-weight="600" fill="#16181d">Text in</text>
+<text x="157.5" y="104.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#5a6070">plain or marked up</text>
+<rect x="234" y="62" width="115" height="56" rx="5" fill="#f7f8fa" stroke="#d9dce3" stroke-width="1"/>
+<text x="291.5" y="89.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="11.5" font-weight="600" fill="#16181d">Front end</text>
+<text x="291.5" y="104.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#5a6070">normalise · G2P</text>
+<rect x="368" y="62" width="115" height="56" rx="5" fill="#f7f8fa" stroke="#d9dce3" stroke-width="1"/>
+<text x="425.5" y="89.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="11.5" font-weight="600" fill="#16181d">Acoustic model</text>
+<text x="425.5" y="104.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#5a6070">phonemes → mel</text>
+<rect x="502" y="62" width="115" height="56" rx="5" fill="#f7f8fa" stroke="#d9dce3" stroke-width="1"/>
+<text x="559.5" y="89.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="11.5" font-weight="600" fill="#16181d">Vocoder</text>
+<text x="559.5" y="104.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#5a6070">mel → 24 kHz PCM</text>
+<rect x="636" y="62" width="115" height="56" rx="5" fill="#f7f8fa" stroke="#d9dce3" stroke-width="1"/>
+<text x="693.5" y="89.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="11.5" font-weight="600" fill="#16181d">AudioWorklet</text>
+<text x="693.5" y="104.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#5a6070">streaming out</text>
+<line x1="217.0" y1="90.0" x2="232.0" y2="90.0" stroke="#8b93a3" stroke-width="1.4" marker-end="url(#ah)"/>
+<line x1="351.0" y1="90.0" x2="366.0" y2="90.0" stroke="#8b93a3" stroke-width="1.4" marker-end="url(#ah)"/>
+<line x1="485.0" y1="90.0" x2="500.0" y2="90.0" stroke="#8b93a3" stroke-width="1.4" marker-end="url(#ah)"/>
+<line x1="619.0" y1="90.0" x2="634.0" y2="90.0" stroke="#8b93a3" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="100" y="132" width="230" height="32" rx="5" fill="#f7f8fa" stroke="#d9dce3" stroke-width="1"/>
+<text x="215.0" y="147.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="10.5" font-weight="600" fill="#16181d">Voice library  ·  200+ built-in voices</text>
+<text x="215.0" y="162.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="400" fill="#5a6070">an embedding vector and a sample clip each</text>
+<rect x="100" y="174" width="110" height="32" rx="5" fill="#ffffff" stroke="#d9dce3" stroke-width="1"/>
+<text x="155.0" y="189.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="10" font-weight="600" fill="#16181d">Reference audio</text>
+<text x="155.0" y="204.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="400" fill="#5a6070">10 seconds</text>
+<rect x="224" y="174" width="106" height="32" rx="5" fill="#f7f8fa" stroke="#d9dce3" stroke-width="1"/>
+<text x="277.0" y="189.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="10" font-weight="600" fill="#16181d">Speaker encoder</text>
+<text x="277.0" y="204.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="400" fill="#5a6070">voice vector</text>
+<line x1="212.0" y1="190.0" x2="222.0" y2="190.0" stroke="#8b93a3" stroke-width="1.4" marker-end="url(#ah)"/>
+<polyline points="332,190.0 425.5,190.0 425.5,148.0" fill="none" stroke="#8b93a3" stroke-width="1.4"/>
+<polyline points="332,148.0 425.5,148.0 425.5,122.0" fill="none" stroke="#8b93a3" stroke-width="1.4" marker-end="url(#ah)"/>
+<circle cx="425.5" cy="148.0" r="2.4" fill="#8b93a3"/>
+<text x="340.0" y="144.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="400" fill="#5a6070" font-style="italic">default</text>
+<text x="340.0" y="186.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="400" fill="#5a6070" font-style="italic">cloning path</text>
+<text x="88.0" y="252.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="600" fill="#5a6070">KERNELS</text>
+<rect x="100" y="230" width="651" height="38" rx="5" fill="#eef2f8" stroke="#c3d0e2" stroke-width="1"/>
+<text x="425.5" y="253.0" text-anchor="middle" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="11" font-weight="600" fill="#1f4f8f">Kernel interface  —  gemm · conv · attention · activations</text>
+<line x1="559.5" y1="122.0" x2="559.5" y2="227.0" stroke="#8b93a3" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+<text x="571.0" y="160.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="400" fill="#5a6070" font-style="italic">all tensor compute runs here</text>
+<text x="88.0" y="312.0" text-anchor="end" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9" font-weight="600" fill="#5a6070">BACKENDS</text>
+<rect x="100" y="286" width="316" height="100" rx="5" fill="#f7f8fa" stroke="#d9dce3"/>
+<text x="114.0" y="307.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="11.5" font-weight="600" fill="#1f4f8f">CPU backend</text>
+<text x="114.0" y="322.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#5a6070">WebAssembly SIMD  ·  default</text>
+<circle cx="117" cy="337.5" r="1.7" fill="#9aa2b1"/>
+<text x="125.0" y="341.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Hand-written GEMM microkernel</text>
+<circle cx="117" cy="351.5" r="1.7" fill="#9aa2b1"/>
+<text x="125.0" y="355.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Cache blocking, register tiling, packing</text>
+<circle cx="117" cy="365.5" r="1.7" fill="#9aa2b1"/>
+<text x="125.0" y="369.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">int8 weights, per-channel scales, fused ops</text>
+<circle cx="117" cy="379.5" r="1.7" fill="#9aa2b1"/>
+<text x="125.0" y="383.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Workers over SharedArrayBuffer</text>
+<rect x="435" y="286" width="316" height="100" rx="5" fill="#f7f8fa" stroke="#d9dce3"/>
+<text x="449.0" y="307.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="11.5" font-weight="600" fill="#1f4f8f">GPU backend</text>
+<text x="449.0" y="322.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#5a6070">WGSL compute  ·  when available</text>
+<circle cx="452" cy="337.5" r="1.7" fill="#9aa2b1"/>
+<text x="460.0" y="341.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Tiled matmul in workgroup memory</text>
+<circle cx="452" cy="351.5" r="1.7" fill="#9aa2b1"/>
+<text x="460.0" y="355.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Fused dequantise → multiply</text>
+<circle cx="452" cy="365.5" r="1.7" fill="#9aa2b1"/>
+<text x="460.0" y="369.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Same operator set, same tests</text>
+<circle cx="452" cy="379.5" r="1.7" fill="#9aa2b1"/>
+<text x="460.0" y="383.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#16181d">Carries the larger cloning model</text>
+<line x1="100" y1="406" x2="751" y2="406" stroke="#d9dce3"/>
+<text x="100.0" y="424.0" text-anchor="start" font-family="Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#5a6070" font-style="italic">The same engine package runs unchanged in the browser, in Node and in Electron. No framework is imported below the demo layer.</text>
+</svg>
