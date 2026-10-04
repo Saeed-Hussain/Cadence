@@ -18,15 +18,18 @@ export const CORPUS = {
 
 export const MODELS_DIR = new URL('../../.cache/models/', import.meta.url);
 
+/** Where Piper voices are published. Kokoro's weights are fetched by its own loader. */
+export const PIPER_BASE = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/';
+
 /**
- * @typedef {{id: string, family: 'kokoro' | 'piper', label: string, dtype?: string, file?: string, params: string}} Candidate
+ * @typedef {{id: string, family: 'kokoro' | 'piper', label: string, dtype?: string, file?: string, path?: string, params: string}} Candidate
  * @type {Candidate[]}
  */
 export const CANDIDATES = [
-  { id: 'piper-lessac-low', family: 'piper', label: 'Piper · Lessac · low', file: 'en_US-lessac-low', params: '~5M' },
-  { id: 'piper-lessac-medium', family: 'piper', label: 'Piper · Lessac · medium', file: 'en_US-lessac-medium', params: '~15M' },
-  { id: 'piper-libritts_r-medium', family: 'piper', label: 'Piper · LibriTTS-R · medium (904 speakers)', file: 'en_US-libritts_r-medium', params: '~15M' },
-  { id: 'piper-lessac-high', family: 'piper', label: 'Piper · Lessac · high', file: 'en_US-lessac-high', params: '~28M' },
+  { id: 'piper-lessac-low', family: 'piper', label: 'Piper · Lessac · low', file: 'en_US-lessac-low', path: 'en/en_US/lessac/low', params: '~5M' },
+  { id: 'piper-lessac-medium', family: 'piper', label: 'Piper · Lessac · medium', file: 'en_US-lessac-medium', path: 'en/en_US/lessac/medium', params: '~15M' },
+  { id: 'piper-libritts_r-medium', family: 'piper', label: 'Piper · LibriTTS-R · medium (904 speakers)', file: 'en_US-libritts_r-medium', path: 'en/en_US/libritts_r/medium', params: '~15M' },
+  { id: 'piper-lessac-high', family: 'piper', label: 'Piper · Lessac · high', file: 'en_US-lessac-high', path: 'en/en_US/lessac/high', params: '~28M' },
   { id: 'kokoro-q8', family: 'kokoro', label: 'Kokoro-82M · int8', dtype: 'q8', params: '82M' },
   { id: 'kokoro-q4', family: 'kokoro', label: 'Kokoro-82M · int4', dtype: 'q4', params: '82M' },
   { id: 'kokoro-fp32', family: 'kokoro', label: 'Kokoro-82M · fp32', dtype: 'fp32', params: '82M' },

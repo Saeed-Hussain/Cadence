@@ -4,15 +4,15 @@
  *   npm run bench                      every candidate whose weights are here
  *   npm run bench -- piper-lessac-low  just the named ones
  *
- * Writes docs/bench/<cpu>.json and regenerates docs/BENCHMARKS.md from every
- * machine's file, losses included.
+ * Writes docs/bench/<cpu>.json and regenerates docs/BENCHMARKS.md.
  */
 
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
-import { CANDIDATES, CORPUS, MODELS_DIR } from './candidates.js';
+import { CANDIDATES, MODELS_DIR } from './candidates.js';
+import { writeReport } from './report.js';
 
 const only = process.argv.slice(2);
 const DOCS = new URL('../../docs/', import.meta.url);
@@ -62,35 +62,4 @@ for (const c of CANDIDATES) {
 
 await mkdir(new URL('bench/', DOCS), { recursive: true });
 await writeFile(file, `${JSON.stringify({ machine, runs: [...runs.values()] }, null, 2)}\n`);
-await writeMarkdown();
-
-async function writeMarkdown() {
-  const files = (await readdir(new URL('bench/', DOCS))).filter((f) => f.endsWith('.json') && !f.endsWith('.browser.json'));
-  let md = `# Benchmarks
-
-Measured with \`npm run bench\`, natively (onnxruntime-node), on named hardware. Every
-candidate is shown, including the ones that lose. Regenerated from \`docs/bench/*.json\`;
-do not edit by hand.
-
-**RTF** is real-time factor: seconds of compute per second of audio. Under 1 is faster
-than real time. The proposal's target is under 0.3. **First audio** is the time until
-the first sentence of the short passage is ready.
-
-Text: short "${CORPUS.short}" · medium, two sentences · long, four sentences.
-Median of five runs after one warm-up.
-`;
-  for (const f of files) {
-    const { machine: m, runs: rs } = JSON.parse(await readFile(new URL(`bench/${f}`, DOCS), 'utf8'));
-    md += `\n## ${m.cpu} · ${m.threads} threads · ${m.ramGb} GB RAM\n\n${m.os} · Node ${m.node}\n\n`;
-    md += '| Model | Params | RTF long | RTF short | First audio | Load | Peak memory |\n|---|---|---|---|---|---|---|\n';
-    const sorted = [...rs].sort((a, b) => (a.results?.long.rtf ?? 99) - (b.results?.long.rtf ?? 99));
-    for (const r of sorted) {
-      if (r.error) { md += `| ${r.label} | ${r.params} | failed: ${r.error} | | | | |\n`; continue; }
-      const rtf = r.results.long.rtf;
-      const mark = rtf < 0.3 ? ' ✅' : rtf < 1 ? ' ✔︎' : ' ✗';
-      md += `| ${r.label} | ${r.params} | **${rtf.toFixed(3)}**${mark} | ${r.results.short.rtf.toFixed(3)} | ${Math.round(r.results.short.ttfaMs)} ms | ${(r.loadMs / 1000).toFixed(1)} s | ${r.peakRssMb} MB |\n`;
-    }
-  }
-  md += '\n✅ meets the target (< 0.3) · ✔︎ faster than real time · ✗ slower than real time\n';
-  await writeFile(new URL('BENCHMARKS.md', DOCS), md);
-}
+await writeReport();

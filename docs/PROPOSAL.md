@@ -4,7 +4,7 @@
 
 **Author:** Saeed Hussain — Full-Stack Software Engineer, AiroxLab
 **Date:** 19 September 2026
-**Status:** Proposal — not yet started
+**Status:** In progress — M0 done 3 October 2026; M2 (kernels) next
 **Roadmap entry:** `PROJECTS-ROADMAP.md` #16
 **Languages:** JavaScript (ES2023+) · WebAssembly SIMD · WGSL · PyTorch for training only
 
@@ -269,21 +269,47 @@ cases where it loses to the commercial products.
 
 ---
 
-## 11. Decisions still open
+## 11. Decisions
 
-1. **Which reference weights for Phase 1** — decided by M0's measured real-time factor,
-   not by preference.
-2. **Languages at launch** — English only is defensible for Phase 1; multilingual widens
+### Taken
+
+1. **Which reference weights for Phase 1** — decided by M0 on 3 October 2026, by
+   measurement on the slowest target machine (Intel Core i5-4310U, 2 cores / 4 threads,
+   8 GB). Every number is in `docs/BENCHMARKS.md`.
+   - **Fast path: Piper LibriTTS-R medium.** VITS, about 15M parameters, 904 speakers in
+     one 75 MB model. Natively RTF 0.132 with first audio at 200 ms, inside the 0.3
+     target, and the best-sounding of the fast candidates in a listening test. Its
+     speakers are the built-in library: a speaker index into one model, as §4.1 predicts.
+   - **Higher-quality path: Kokoro-82M, in fp32.** Natively RTF 1.43 here, slower than
+     real time, so it is opt-in rather than the default. Its int8 weights were the
+     slowest format measured (2.87), not the fastest.
+   - **Not chosen:** Piper Lessac low and medium (as fast, one voice each) and Piper
+     Lessac high (0.91, too close to real time to stream reliably).
+
+   The fast model in the browser (onnxruntime-web, WebAssembly) runs at RTF 0.448 on one
+   thread: faster than real time, 3.4× slower than native, outside the target. WebGPU
+   does not run it (an unsupported integer `GatherND`). ONNX Runtime's profiler puts 82%
+   of the browser's time in convolution, 70% `Conv` and 12% `ConvTranspose`, almost all
+   of it in the vocoder's residual blocks: 32 to 64 channels over 50,000+ samples,
+   kernels of 3 to 7. That is the shape the M2 kernels are written for.
+
+### Still open
+
+1. **Languages at launch** — English only is defensible for Phase 1; multilingual widens
    the G2P work considerably.
-3. **Electron build or browser only** — Electron gives file-system access for long-form
-   work; the browser gives a link anyone can open. The link probably matters more.
-4. **Threading fallback** — `SharedArrayBuffer` requires cross-origin isolation headers.
-   A single-threaded path has to exist for environments that will not supply them.
-5. **How the voice library is sourced** — corpus speakers, sampled synthetic voices, or a
+2. **Electron build or browser only** — Electron gives file-system access for long-form
+   work; the browser gives a link anyone can open. The link probably matters more. M0
+   adds a number: on the target machine the native runtime is 3.4× faster than the
+   browser for the same model, until the M2 kernels close that gap.
+3. **Threading fallback** — `SharedArrayBuffer` requires cross-origin isolation headers.
+   A single-threaded path has to exist for environments that will not supply them. On
+   the two-core target, one thread was measured faster than two or four for the fast
+   model, so the fallback may also be the default there.
+4. **How the voice library is sourced** — corpus speakers, sampled synthetic voices, or a
    mix. Synthetic voices impersonate nobody, which is the cleaner position, but they need
    the embedding space to be well behaved first. Decide after M3, when there is something
    to listen to.
-6. **What the preview samples say** — one identical sentence across all voices makes them
+5. **What the preview samples say** — one identical sentence across all voices makes them
    directly comparable; varied sentences show range but make comparison harder. Probably
    one shared sentence, with custom preview text available through the live engine.
 

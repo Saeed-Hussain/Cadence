@@ -34,12 +34,34 @@ The first visit downloads the weights (~92 MB, 8-bit) once; the browser caches t
 - `apps/web` (`@cadence/web`) is the Next.js app. It imports the engine; the engine
   never imports it.
 
-## Measured on this machine
+## Speed, measured
 
-Intel Core i5-4310U (2014, 2 cores / 4 threads), Node, 8-bit weights: real-time factor
-about 3.2–3.5, i.e. slower than real time. Playback streams sentence by sentence so
-audio starts before the whole text is done. Modern CPUs and WebGPU are far faster;
-that gap is what the M2 SIMD kernels exist to close.
+The target machine is the slowest one Cadence has to run on: an Intel Core i5-4310U from
+2014, 2 cores / 4 threads, 8 GB. If it is fast there, it is fast everywhere.
+
+| On the i5-4310U | Real-time factor | First audio |
+|---|---|---|
+| Fast path, Piper LibriTTS-R, native | 0.132 | 200 ms |
+| Fast path, Piper LibriTTS-R, in Chrome | 0.448 | 1.4 s |
+| HD path, Kokoro-82M fp32, native | 1.43 | 3.1 s |
+
+Under 1 is faster than real time; the target is under 0.3. Every candidate, including the
+losers, is in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Closing the browser gap is what
+the M2 kernels are for: 82% of the browser's time is convolution.
+
+```
+npm run bench:fetch      # download the candidates' weights (once)
+npm run bench            # every candidate, natively
+npm run bench:browser    # the fast path in Chrome, per thread count and WebGPU
+npm run bench:report     # rebuild docs/BENCHMARKS.md from docs/bench/*.json
+```
+
+Weights live in `.cache/models/`, which is not committed.
+
+**The rule:** CI cannot measure speed, because it does not run on the target. So no
+change to the engine or its models is merged without re-running the benchmarks on the
+target machine and committing the regenerated `docs/BENCHMARKS.md` with it. A slower
+number gets published, not hidden.
 
 ## Start here
 

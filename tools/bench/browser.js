@@ -17,6 +17,7 @@ import { extname, join, normalize } from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
+import { writeReport } from './report.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const model = process.argv[2] ?? 'en_US-libritts_r-medium';

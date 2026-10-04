@@ -10,8 +10,10 @@
     "web": "npm run dev --workspace @cadence/web",
     "build:web": "npm run build --workspace @cadence/web",
     "test": "node --test \"packages/*/test/*.test.js\"",
+    "bench:fetch": "node tools/bench/fetch.js",
     "bench": "node tools/bench/native.js",
-    "bench:browser": "node tools/bench/browser.js"
+    "bench:browser": "node tools/bench/browser.js",
+    "bench:report": "node tools/bench/report.js"
   },
   "engines": {
     "node": ">=22"
