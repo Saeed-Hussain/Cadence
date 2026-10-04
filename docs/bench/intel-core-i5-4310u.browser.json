@@ -1,0 +1,98 @@
+{
+  "en_US-libritts_r-medium": {
+    "chrome": "Chrome/154.0.8037.97",
+    "date": "2026-10-03",
+    "results": [
+      {
+        "label": "wasm · 1 thread",
+        "ep": "wasm",
+        "threads": 1,
+        "isolated": true,
+        "loadMs": 18085.564999997616,
+        "results": {
+          "short": {
+            "rtf": 1.0054956341855679,
+            "ttfaMs": 1389.1700000017881,
+            "audioS": 1.3815873015873017,
+            "wallMs": 1389.1799999922514
+          },
+          "medium": {
+            "rtf": 0.5831695949927993,
+            "ttfaMs": 1400.905000001192,
+            "audioS": 5.5495691609977325,
+            "wallMs": 3236.3400000035763
+          },
+          "long": {
+            "rtf": 0.4481621530210708,
+            "ttfaMs": 1848.4350000023842,
+            "audioS": 14.547301587301588,
+            "wallMs": 6519.550000011921
+          }
+        },
+        "memoryMb": 110
+      },
+      {
+        "label": "wasm · 2 threads",
+        "ep": "wasm",
+        "threads": 2,
+        "isolated": true,
+        "loadMs": 7638.530000001192,
+        "results": {
+          "short": {
+            "rtf": 0.7570234788719356,
+            "ttfaMs": 1037.094999998808,
+            "audioS": 1.3699773242630386,
+            "wallMs": 1037.1049999892712
+          },
+          "medium": {
+            "rtf": 0.7911957915682887,
+            "ttfaMs": 1913.4599999934435,
+            "audioS": 5.537959183673469,
+            "wallMs": 4381.609999999404
+          },
+          "long": {
+            "rtf": 0.8600813592883575,
+            "ttfaMs": 3109.889999985695,
+            "audioS": 14.814331065759637,
+            "wallMs": 12741.529999986291
+          }
+        },
+        "memoryMb": 111
+      },
+      {
+        "label": "wasm · 4 threads",
+        "ep": "wasm",
+        "threads": 4,
+        "isolated": true,
+        "loadMs": 11059.715000003576,
+        "results": {
+          "short": {
+            "rtf": 1.314323694741271,
+            "ttfaMs": 1876.8799999952316,
+            "audioS": 1.4280272108843537,
+            "wallMs": 1876.890000000596
+          },
+          "medium": {
+            "rtf": 1.2376472076778862,
+            "ttfaMs": 2707.7999999970198,
+            "audioS": 5.596009070294785,
+            "wallMs": 6925.884999990463
+          },
+          "long": {
+            "rtf": 0.8789819471028991,
+            "ttfaMs": 3636.2099999934435,
+            "audioS": 14.686621315192744,
+            "wallMs": 12909.27499999106
+          }
+        },
+        "memoryMb": 110
+      },
+      {
+        "label": "webgpu",
+        "ep": "webgpu",
+        "threads": 4,
+        "error": "[WebGPU] Kernel \"[GatherND] /dp/flows.7/GatherND\" failed. Error: Unsupported data type: 7"
+      }
+    ]
+  }
+}

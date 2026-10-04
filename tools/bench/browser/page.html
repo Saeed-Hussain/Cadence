@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Cadence browser bench</title>
+<!-- Bare imports resolved to the same packages the app bundles. -->
+<script type="importmap">
+  {
+    "imports": {
+      "onnxruntime-web": "/node_modules/onnxruntime-web/dist/ort.all.bundle.min.mjs",
+      "phonemizer": "/node_modules/phonemizer/dist/phonemizer.js"
+    }
+  }
+</script>
+<script type="module" src="./page.js"></script>

@@ -65,7 +65,7 @@ await writeFile(file, `${JSON.stringify({ machine, runs: [...runs.values()] }, n
 await writeMarkdown();
 
 async function writeMarkdown() {
-  const files = (await readdir(new URL('bench/', DOCS))).filter((f) => f.endsWith('.json'));
+  const files = (await readdir(new URL('bench/', DOCS))).filter((f) => f.endsWith('.json') && !f.endsWith('.browser.json'));
   let md = `# Benchmarks
 
 Measured with \`npm run bench\`, natively (onnxruntime-node), on named hardware. Every

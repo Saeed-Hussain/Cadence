@@ -10,9 +10,13 @@
     "web": "npm run dev --workspace @cadence/web",
     "build:web": "npm run build --workspace @cadence/web",
     "test": "node --test \"packages/*/test/*.test.js\"",
-    "bench": "node tools/bench/native.js"
+    "bench": "node tools/bench/native.js",
+    "bench:browser": "node tools/bench/browser.js"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.12.0"
   }
 }
