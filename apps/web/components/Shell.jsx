@@ -166,7 +166,7 @@ function Logo() {
 }
 
 function EnginePill() {
-  const { engineState, engine } = useStore();
+  const { engineState, activeModel } = useStore();
   const loading = engineState.status === 'loading' || engineState.status === 'idle';
   const pct = Math.round(engineState.progress * 100);
   const c = 2 * Math.PI * 9;
@@ -181,8 +181,8 @@ function EnginePill() {
         <span className="dot" aria-hidden="true" />
       )}
       <span className="engine-meta">
-        <b>{engine.model.name}</b>
-        <span>{loading ? (engineState.phase === 'init' ? 'Starting model…' : `Downloading · ${pct}%`) : `Ready · on-device · ${engine.model.backend.toUpperCase()}`}</span>
+        <b>{activeModel.name}</b>
+        <span>{loading ? (engineState.phase === 'init' ? 'Starting model…' : engineState.phase === 'cache' ? 'Loading from this device…' : `Downloading · ${pct}%`) : `Ready · on this device`}</span>
       </span>
     </Link>
   );

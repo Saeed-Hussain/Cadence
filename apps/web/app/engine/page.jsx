@@ -10,28 +10,32 @@ import { useStore } from '@/lib/store.jsx';
  * on what, and how fast. Every number here is measured in this tab.
  */
 
+// Ordered by M0's profile of the fast model in the browser: convolution is 82%
+// of the time, so it is written first.
 const KERNELS = [
+  { op: 'conv1d', what: 'Dilated 1-D convolution · 70% of browser time', cpu: 'next', gpu: 'planned' },
+  { op: 'conv_transpose1d', what: 'Upsampling convolution · 12%', cpu: 'next', gpu: 'planned' },
   { op: 'gemm_f32', what: 'Matrix multiply microkernel', cpu: 'planned', gpu: 'planned' },
-  { op: 'gemm_q8', what: 'Int8 quantised GEMM', cpu: 'planned', gpu: 'planned' },
-  { op: 'conv1d', what: 'Dilated 1-D convolution', cpu: 'planned', gpu: 'planned' },
   { op: 'attention', what: 'Scaled dot-product attention', cpu: 'planned', gpu: 'planned' },
   { op: 'layernorm', what: 'Layer normalisation', cpu: 'planned', gpu: 'planned' },
   { op: 'gelu / snake', what: 'Activations', cpu: 'planned', gpu: 'planned' },
   { op: 'istft', what: 'Inverse STFT (vocoder output)', cpu: 'planned', gpu: 'planned' },
 ];
 
+// The plan in docs/PROPOSAL.md §8.
+const DONE = new Set(['M0']);
+const NOW = 'M1';
+
 const MILESTONES = [
-  { id: 'M0', name: 'The spike', week: 2, done: 'Real-time factor measured on the target CPU' },
-  { id: 'M1', name: 'It speaks', week: 6, done: 'Normalisation and G2P pass a held-out set' },
-  { id: 'M2', name: 'It is fast', week: 10, done: 'SIMD GEMM ≥ 10× the naive kernel' },
-  { id: 'M3', name: 'It is audible', week: 14, done: 'End-to-end synthesis streaming to an AudioWorklet' },
-  { id: 'M4', name: 'It is portable', week: 16, done: 'GPU backend passes the CPU operator tests' },
-  { id: 'M4b', name: 'It has voices', week: 18, done: '200+ curated voices with samples' },
-  { id: 'M5', name: 'It ships', week: 18, done: 'Cloning, editor, deployed demo, benchmarks' },
+  { id: 'M0', name: 'Measure and choose', when: '3 Oct', done: 'Every candidate measured on the reference machine; model chosen' },
+  { id: 'M1', name: 'Reliable engine', when: 'now', done: 'In-app within 15% of standalone; no gaps; offline; recovers from failed downloads' },
+  { id: 'M2', name: 'SDK', when: 'next', done: 'Packaged engine with a documented API, types and a Node path' },
+  { id: 'M3', name: 'Licensing and docs', when: '', done: 'LICENSE, notices, phonemiser licence resolved, getting-started guide' },
+  { id: 'M4', name: 'Benchmarks against alternatives', when: '', done: 'Speed, first audio, size, memory, quality on three hardware tiers' },
 ];
 
 export default function Engine() {
-  const { engine, engineState, history, setModel } = useStore();
+  const { models, activeModel, history, chooseModel, retryModel, offlineReady } = useStore();
   const [gpu, setGpu] = useState(/** @type {boolean | null} */ (null));
   const [threads, setThreads] = useState(0);
   const [isolated, setIsolated] = useState(/** @type {boolean | null} */ (null));
@@ -44,6 +48,8 @@ export default function Engine() {
 
   const recent = history.slice(0, 20);
   const rtf = recent.length ? recent.reduce((s, h) => s + h.stats.rtf, 0) / recent.length : null;
+  const withGaps = recent.filter((h) => typeof h.stats.gaps === 'number');
+  const gaps = withGaps.length ? withGaps.reduce((s, h) => s + (h.stats.gaps ?? 0), 0) : null;
   const ttfa = recent.length ? recent.reduce((s, h) => s + h.stats.ttfaMs, 0) / recent.length : null;
   // The dial reads 0 → 1; below 0.3 is the target zone.
   const fill = rtf === null ? 0 : Math.max(0.02, 1 - Math.min(rtf, 1));
@@ -57,7 +63,7 @@ export default function Engine() {
           <p className="sub">What is running, on what hardware, and how fast — measured live in this tab.</p>
         </div>
         <span className="tag warn" style={{ height: 28, padding: '0 12px', fontSize: 12.5 }}>
-          <Icon name="info" size={14} /> &nbsp;Reference weights on ONNX Runtime Web — hand-written kernels replace it at M2
+          <Icon name="info" size={14} /> &nbsp;Reference weights on ONNX Runtime Web — hand-written kernels come after the MVP
         </span>
       </div>
 
@@ -94,7 +100,7 @@ export default function Engine() {
               <div><b className="tnum">{ttfa === null ? '—' : `${Math.round(ttfa)}`}<small>{ttfa === null ? '' : 'ms'}</small></b><span>Time to first audio</span></div>
               <div><b className="tnum">{rtf === null ? '—' : `${(1 / Math.max(rtf, 1e-4)).toFixed(0)}×`}</b><span>Faster than real time</span></div>
             </div>
-            <p className="faint" style={{ fontSize: 12 }}>Targets: RTF &lt; 0.3 on 4 CPU threads · first audio &lt; 200 ms.</p>
+            <p className="faint" style={{ fontSize: 12 }}>Targets: RTF &lt; 0.3 · first audio &lt; 500 ms, in the app, on the reference machine. Gaps: {gaps === null ? '—' : `${gaps} in the last ${recent.length} run${recent.length === 1 ? '' : 's'}`}.</p>
           </div>
         </div>
 
@@ -103,30 +109,37 @@ export default function Engine() {
           <Capability icon="cpu" label="CPU · WASM SIMD" value={threads ? `${threads} threads` : '…'} ok />
           <Capability icon="zap" label="GPU · WebGPU" value={gpu === null ? '…' : gpu ? 'Available' : 'Not available'} ok={!!gpu} />
           <Capability icon="layers" label="Threads · SharedArrayBuffer" value={isolated === null ? '…' : isolated ? 'Cross-origin isolated' : 'Single-thread fallback'} ok={!!isolated} />
-          <Capability icon="voices" label="Voice library" value={`${VOICES.length} voices · ${VOICES.filter((v) => v.kind === 'original').length} originals + blends`} ok />
+          <Capability icon="download" label="Offline · weights and app kept" value={offlineReady ? 'Works with the network off' : 'After the model has loaded once'} ok={offlineReady} />
+          <Capability icon="voices" label="Voice library" value={`${VOICES.length} voices · ${VOICES.filter((v) => v.model === 'swift').length} Swift, ${VOICES.filter((v) => v.model === 'hd').length} HD`} ok />
         </div>
       </div>
 
       <div className="section-title"><h2>Models</h2></div>
       <div className="grid grid-2">
         {MODELS.map((m) => {
-          const active = engine.model.id === m.id;
+          const active = activeModel.id === m.id;
+          const st = models[m.id];
           return (
             <div key={m.id} className={`glass card${active ? '' : ' card-hover'}`} style={{ display: 'grid', gap: 12, boxShadow: active ? 'inset 0 0 0 1.5px var(--accent), var(--shadow)' : undefined }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className="model-opt" style={{ padding: 0, border: 0, background: 'none', width: 'auto' }}>
-                  <span className="model-icon"><Icon name={m.backend === 'gpu' ? 'zap' : 'cpu'} size={16} /></span>
+                  <span className="model-icon"><Icon name={m.id === 'swift' ? 'zap' : 'sparkles'} size={16} /></span>
                 </span>
                 <b style={{ fontSize: 15, fontWeight: 620 }}>{m.name}</b>
-                <span className={`tag ${m.backend === 'cpu' ? 'good' : 'accent'}`}>{m.backend.toUpperCase()}</span>
+                <span className={`tag ${m.id === 'swift' ? 'good' : 'accent'}`}>{m.id === 'swift' ? 'Default' : 'HD'}</span>
                 <span style={{ flex: 1 }} />
-                {active
-                  ? <span className="tag">{engineState.status === 'ready' ? 'Active' : `Loading ${Math.round(engineState.progress * 100)}%`}</span>
-                  : <button type="button" className="btn btn-soft btn-sm" onClick={() => setModel(m.id)}>Switch</button>}
+                <span className="tag">{st.status === 'ready' ? 'Loaded' : st.status === 'loading' ? `Loading ${Math.round(st.progress * 100)}%` : st.status === 'error' ? 'Failed' : 'Not loaded'}</span>
+                {!active && <button type="button" className="btn btn-soft btn-sm" onClick={() => chooseModel(m.id)}>Use</button>}
               </div>
               <p className="muted" style={{ fontSize: 13 }}>{m.description}</p>
-              {active && engineState.status !== 'ready' && <div className="bar"><i style={{ width: `${engineState.progress * 100}%` }} /></div>}
-              <div className="faint mono" style={{ fontSize: 12 }}>Kokoro-82M · {m.sizeMb} MB weights · {m.dtype === 'q8' ? 'int8 quantised' : 'fp32'} · downloaded once, then cached</div>
+              {st.status === 'loading' && <div className="bar"><i style={{ width: `${st.progress * 100}%` }} /></div>}
+              {st.status === 'error' && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <p style={{ color: 'var(--bad)', fontSize: 12.5, flex: 1 }}>{st.error}</p>
+                  <button type="button" className="btn btn-soft btn-sm" onClick={() => retryModel(m.id)}>Retry</button>
+                </div>
+              )}
+              <div className="faint mono" style={{ fontSize: 12 }}>{m.weights} · downloaded once, then cached</div>
             </div>
           );
         })}
@@ -146,13 +159,13 @@ export default function Engine() {
           </div>
         </div>
         <div>
-          <div className="section-title"><h2>Phase 1 roadmap</h2></div>
+          <div className="section-title"><h2>MVP roadmap</h2></div>
           <div className="glass card timeline">
             {MILESTONES.map((m, i) => (
-              <div key={m.id} className={`milestone${i === 0 ? ' now' : ''}`}>
+              <div key={m.id} className={`milestone${DONE.has(m.id) ? ' done' : m.id === NOW ? ' now' : ''}`}>
                 <i />
                 <div><b>{m.id} — {m.name}</b><div><span>{m.done}</span></div></div>
-                <span className="mono">wk {m.week}</span>
+                <span className="mono">{m.when}</span>
               </div>
             ))}
           </div>

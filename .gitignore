@@ -5,3 +5,12 @@ out
 
 # Downloaded model weights and benchmark audio, never committed.
 .cache/
+
+# Inference runtime, copied from node_modules before dev and build.
+apps/web/public/ort/
+
+# The offline shell's file list, written after each build.
+apps/web/public/sw-manifest.json
+
+# The fast model, copied from .cache/models/ before dev and build.
+apps/web/public/models/

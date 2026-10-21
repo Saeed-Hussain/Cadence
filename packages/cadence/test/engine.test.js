@@ -1,26 +1,55 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { VOICES, ORIGINAL_IDS, encodeWav, estimatePitch, matchPitch } from '../src/index.js';
+import { MODELS, VOICES, encodeWav, estimatePitch, matchPitch } from '../src/index.js';
+import { SPEAKERS } from '../src/data/libritts-speakers.js';
 
-test('library has 200+ unique voices built on the 28 originals', () => {
-  assert.ok(VOICES.length >= 200, `${VOICES.length}`);
-  assert.equal(new Set(VOICES.map((v) => v.id)).size, VOICES.length);
-  assert.equal(new Set(VOICES.map((v) => v.name)).size, VOICES.length, 'names are unique');
-  assert.equal(ORIGINAL_IDS.length, 28);
-  for (const v of VOICES) {
-    assert.ok(v.mix.length >= 1);
-    for (const [id, w] of v.mix) assert.ok(ORIGINAL_IDS.includes(id) && w > 0, `${v.id}: ${id}`);
-    assert.ok(Math.abs(v.mix.reduce((s, [, w]) => s + w, 0) - 1) < 0.01, `${v.id} weights sum to 1`);
+const swift = VOICES.filter((v) => v.model === 'swift');
+const hd = VOICES.filter((v) => v.model === 'hd');
+
+test('every speaker in the fast model is in the library, once', () => {
+  assert.equal(SPEAKERS.length, 904);
+  assert.equal(swift.length, SPEAKERS.length);
+  const indices = new Set(swift.map((v) => v.speaker));
+  assert.equal(indices.size, swift.length);
+  for (const i of indices) assert.ok(Number.isInteger(i) && i >= 0 && i < 904, `speaker ${i}`);
+});
+
+test('the HD voices are the 28 Kokoro originals', () => {
+  assert.equal(hd.length, 28);
+  for (const v of hd) {
+    assert.deepEqual(v.mix, [[v.id, 1]]);
+    assert.ok(v.lang === 'a' || v.lang === 'b');
   }
 });
 
-test('blends never mix genders', () => {
-  for (const v of VOICES) for (const [id] of v.mix) assert.equal(id[1] === 'f', v.gender === 'female', v.id);
+test('ids and names are unique across the whole library', () => {
+  assert.equal(new Set(VOICES.map((v) => v.id)).size, VOICES.length);
+  assert.equal(new Set(VOICES.map((v) => v.name)).size, VOICES.length);
 });
 
-test('pitch matching picks the right side of the voice range', () => {
-  assert.equal(matchPitch(210).gender, 'female');
-  assert.equal(matchPitch(100).gender, 'male');
+test('labels follow the measurements', () => {
+  for (const v of swift) {
+    if (v.gender === 'female') assert.ok(v.pitch >= 165, `${v.id} ${v.pitch}`);
+    if (v.gender === 'male') assert.ok(v.pitch < 145, `${v.id} ${v.pitch}`);
+  }
+  // A library that is all one gender means the measurement went wrong.
+  const female = swift.filter((v) => v.gender === 'female').length;
+  const male = swift.filter((v) => v.gender === 'male').length;
+  assert.ok(female > 100 && male > 100, `female ${female}, male ${male}`);
+});
+
+test('every voice belongs to a model the engine knows', () => {
+  const ids = new Set(MODELS.map((m) => m.id));
+  for (const v of VOICES) assert.ok(ids.has(v.model), v.id);
+});
+
+test('pitch matching returns the nearest Swift voice', () => {
+  for (const target of [95, 130, 180, 240]) {
+    const got = matchPitch(target);
+    assert.equal(got.model, 'swift');
+    const best = Math.min(...swift.filter((v) => v.pitch > 0).map((v) => Math.abs(v.pitch - target)));
+    assert.equal(Math.abs(got.pitch - target), best);
+  }
 });
 
 test('pitch estimate recovers a pure tone', () => {

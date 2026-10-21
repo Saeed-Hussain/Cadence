@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { phonemeIds, sentences } from '../src/piper.js';
+import { chunks, phonemeIds, sentences } from '../src/piper.js';
 
 // A tiny map in Piper's format: every symbol to a list of one id.
 const map = Object.fromEntries(
@@ -22,4 +22,19 @@ test('ids are BOS, then each phoneme followed by the pad, then EOS', async () =>
 test('sentences split on terminal punctuation and keep it', () => {
   assert.deepEqual(sentences('One. Two! Three? Four'), ['One.', 'Two!', 'Three?', 'Four']);
   assert.deepEqual(sentences('No ending'), ['No ending']);
+});
+
+test('chunks keep short sentences whole and lose no words', () => {
+  assert.deepEqual(chunks('One. Two! Three?'), ['One.', 'Two!', 'Three?']);
+  const long = 'The lighthouse keeper had not seen a ship in eleven years, and the village below had long since stopped asking her about it, because the answer never changed and the question only made her sad. '.repeat(3);
+  const got = chunks(long);
+  assert.equal(got.join(' ').replace(/\s+/g, ' '), long.trim().replace(/\s+/g, ' '));
+  assert.ok(got[0].length <= 120, `first piece ${got[0].length}`);
+  for (const c of got) assert.ok(c.length <= 260, `piece ${c.length}`);
+});
+
+test('long sentences split at clauses before words', () => {
+  const s = `${'word '.repeat(20).trim()}, ${'more '.repeat(20).trim()}.`;
+  const [a] = chunks(s, { first: 120 });
+  assert.ok(a.endsWith(','), a);
 });

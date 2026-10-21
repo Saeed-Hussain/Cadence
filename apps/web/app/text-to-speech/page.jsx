@@ -25,7 +25,7 @@ const STARTERS = [
 export default function TextToSpeech() {
   const {
     voiceId, setVoiceId, settings, setSettings, generate, generating, stop,
-    engineState, engine, setModel, history, playEntry, toast,
+    engineState, activeModel, chooseModel, history, playEntry, retryModel,
   } = useStore();
   const [text, setText] = useState('');
   const [tab, setTab] = useState(/** @type {'settings' | 'history'} */ ('settings'));
@@ -108,7 +108,9 @@ export default function TextToSpeech() {
             )}
             <span style={{ flex: 1 }} />
             <span className="faint" style={{ fontSize: 12 }}>
-              {engineState.status === 'error' ? 'Model failed to load' : loading ? (engineState.phase === 'init' ? 'Starting model…' : `Downloading model · ${Math.round(engineState.progress * 100)}%`) : 'Ctrl ↵'}
+              {engineState.status === 'error' ? (
+                <>Model failed to load · <button type="button" className="btn btn-ghost btn-sm" onClick={() => retryModel(activeModel.id)}>Retry</button></>
+              ) : loading ? (engineState.phase === 'init' ? 'Starting model…' : engineState.phase === 'cache' ? 'Loading model from this device…' : `Downloading model · ${Math.round(engineState.progress * 100)}%`) : 'Ctrl ↵'}
             </span>
             {generating ? (
               <button type="button" className="btn btn-primary working" onClick={stop}>
@@ -146,12 +148,12 @@ export default function TextToSpeech() {
                     <button
                       key={m.id}
                       type="button"
-                      className={`model-opt${engine.model.id === m.id ? ' on' : ''}`}
-                      onClick={() => { if (engine.model.id !== m.id) { setModel(m.id); toast(`Switching to ${m.name}`); } }}
+                      className={`model-opt${activeModel.id === m.id ? ' on' : ''}`}
+                      onClick={() => chooseModel(m.id)}
                     >
-                      <span className="model-icon"><Icon name={m.backend === 'gpu' ? 'zap' : 'cpu'} size={16} /></span>
+                      <span className="model-icon"><Icon name={m.id === 'swift' ? 'zap' : 'sparkles'} size={16} /></span>
                       <span>
-                        <b>{m.name} <span className={`tag ${m.backend === 'cpu' ? 'good' : 'accent'}`} style={{ display: 'inline-flex', marginTop: 0 }}>{m.backend.toUpperCase()}</span></b>
+                        <b>{m.name} <span className={`tag ${m.id === 'swift' ? 'good' : 'accent'}`} style={{ display: 'inline-flex', marginTop: 0 }}>{m.id === 'swift' ? 'Default' : 'HD'}</span></b>
                         <span>{m.tagline}</span>
                       </span>
                     </button>
@@ -161,8 +163,8 @@ export default function TextToSpeech() {
                 <Slider label="Speed" value={settings.speed} min={0.7} max={1.2} step={0.01}
                   left="Slower" right="Faster" format={(v) => `${v.toFixed(2)}×`} onChange={(speed) => patch({ speed })} />
                 <p className="faint" style={{ fontSize: 12, marginTop: -10 }}>
-                  Stability, similarity and style controls arrive with Cadence&apos;s own model. The reference weights
-                  take only speed, and a control that does nothing would be lying to you.
+                  Stability and style controls come next. Each voice belongs to one model, so choosing a model
+                  switches to one of its voices.
                 </p>
 
                 {last && (

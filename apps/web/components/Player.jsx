@@ -7,11 +7,18 @@ import { Icon } from './Icon.jsx';
 import { Orb } from './Orb.jsx';
 import { Waveform } from './Waveform.jsx';
 
-/** The bar along the bottom that plays whatever was last asked to play. */
+const BARS = 120;
+
+/**
+ * The bar along the bottom that plays whatever was last asked to play.
+ *
+ * The playhead moves sixty times a second, but the clock changes once a
+ * second and the waveform once a bar; each reads the position rounded to what
+ * it can show, so nothing re-renders every frame while the model works.
+ */
 export function Player() {
   const track = usePlayer((s) => s.track);
   const playing = usePlayer((s) => s.playing);
-  const position = usePlayer((s) => s.position);
   const duration = usePlayer((s) => s.duration);
   const volume = usePlayer((s) => s.volume);
   const { byId } = useStore();
@@ -42,14 +49,8 @@ export function Player() {
       </div>
 
       <div className="player-track">
-        <time className="tnum">{clock(position)}</time>
-        <Waveform
-          samples={track.samples}
-          progress={duration ? position / duration : 0}
-          onSeek={(f) => player.seek(f * duration)}
-          bars={120}
-          height={36}
-        />
+        <Elapsed />
+        <PlayerWave samples={track.samples} duration={duration} />
         <time className="tnum">{clock(duration)}</time>
       </div>
 
@@ -89,4 +90,16 @@ export function Player() {
       </div>
     </div>
   );
+}
+
+function Elapsed() {
+  const seconds = usePlayer((s) => Math.floor(s.position));
+  return <time className="tnum">{clock(seconds)}</time>;
+}
+
+/** @param {{samples: Float32Array, duration: number}} props */
+function PlayerWave({ samples, duration }) {
+  // Rounded to whole bars: all a redraw could change.
+  const progress = usePlayer((s) => (s.duration ? Math.floor((s.position / s.duration) * BARS) / BARS : 0));
+  return <Waveform samples={samples} progress={progress} onSeek={(f) => player.seek(f * duration)} bars={BARS} height={36} />;
 }

@@ -16,11 +16,13 @@ const TOOLS = [
   { href: '/studio', icon: 'studio', title: 'Studio', body: 'Long-form narration with a different voice on every line.', tone: '#f59e0b' },
 ];
 
-// The best-graded originals first, then a few blends to show the range.
-const FEATURED = [...VOICES.filter((v) => v.kind === 'original').slice(0, 5), ...VOICES.filter((v) => v.kind === 'blend').slice(0, 3)];
+// The eight from the first listening test: a spread of pitch and pace.
+const FEATURED = ['3922', '2592', '1422', '231', '8758', '6115', '240', '1734']
+  .map((r) => VOICES.find((v) => v.id === `s-${r}`))
+  .filter((v) => v !== undefined);
 
 export default function Home() {
-  const { history, engineState, engine, playEntry } = useStore();
+  const { history, engineState, activeModel, playEntry } = useStore();
   const [greeting, setGreeting] = useState('Welcome');
   useEffect(() => {
     const h = new Date().getHours();
@@ -37,7 +39,7 @@ export default function Home() {
         <div>
           <span className="eyebrow">
             <span className={`dot${ready ? '' : ' loading'}`} style={{ margin: '0 2px 0 4px' }} />
-            {ready ? `${engine.model.name} is ready — running on this device` : engineState.status === 'error' ? 'The model could not be downloaded — check your connection' : engineState.phase === 'init' ? `Starting ${engine.model.name}…` : `Downloading ${engine.model.name} · ${Math.round(engineState.progress * 100)}% · once, then cached`}
+            {ready ? `${activeModel.name} is ready — running on this device` : engineState.status === 'error' ? 'The model could not be downloaded — check your connection' : engineState.phase === 'init' ? `Starting ${activeModel.name}…` : engineState.phase === 'cache' ? `Loading ${activeModel.name} from this device…` : `Downloading ${activeModel.name} · ${Math.round(engineState.progress * 100)}% · once, then cached`}
           </span>
           <h1>{greeting}.<br />What should we say today?</h1>
           <p>
@@ -129,8 +131,7 @@ function FeaturedVoice({ voice }) {
       </div>
       <p>{voice.description}</p>
       <div style={{ display: 'flex', gap: 6 }}>
-        <span className="tag mono">{voice.grade}</span>
-        <span className="tag">{voice.kind === 'original' ? 'Original' : 'Blend'}</span>
+        <span className="tag">{voice.model === 'swift' ? 'Swift' : 'HD'}</span>
         <span className="tag">{voice.tags[0]}</span>
       </div>
     </div>

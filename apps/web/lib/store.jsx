@@ -3,13 +3,15 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
-import { DEFAULT_VOICE_ID, SAMPLE_RATE, VOICES, createEngine } from '@cadence/engine';
+import { DEFAULT_VOICE_ID, MODELS, VOICES, createEngine } from '@cadence/engine';
 import { player } from './audio.js';
 
 /**
  * Everything the app remembers, in one place.
  *
- * The engine is created once per tab and loads after the first paint.
+ * The engine is created once per tab. Swift loads after the first paint; HD
+ * loads only when an HD voice is first used, so nobody downloads 326 MB they
+ * did not ask for.
  * Preferences, saved voices, matched voices and the history list persist to
  * local storage; generated audio persists to the browser cache, so replaying
  * yesterday's generation never runs the model again.
@@ -27,20 +29,24 @@ import { player } from './audio.js';
  * @property {string} model
  * @property {number} createdAt
  * @property {number} seconds
- * @property {{rtf: number, ttfaMs: number, elapsedMs: number, backend: string}} stats
+ * @property {number} sampleRate
+ * @property {{rtf: number, ttfaMs: number, elapsedMs: number, backend: string, gaps?: number, gapMs?: number}} stats
  * @property {'tts' | 'studio'} source
  */
 
 export const DEFAULT_SETTINGS = /** @type {Settings} */ ({ speed: 1 });
 
+// v3: voice ids changed when the library moved to measured Swift speakers.
 const KEY = {
-  favorites: 'cadence:favorites',
-  custom: 'cadence:custom-voices:v2',
-  history: 'cadence:history:v2',
+  favorites: 'cadence:favorites:v3',
+  custom: 'cadence:custom-voices:v3',
+  history: 'cadence:history:v3',
   settings: 'cadence:settings',
-  voice: 'cadence:voice:v2',
-  model: 'cadence:model:v2',
+  voice: 'cadence:voice:v3',
 };
+
+/** @param {Voice} v */
+const rateOf = (v) => (MODELS.find((m) => m.id === v.model) ?? MODELS[0]).sampleRate;
 
 const AUDIO_CACHE = 'cadence-history';
 const audioKey = (/** @type {string} */ id) => `https://cadence.local/history/${id}`;
@@ -85,7 +91,7 @@ const StoreContext = createContext(/** @type {ReturnType<typeof useStoreValue> |
 
 function useStoreValue() {
   const engine = useMemo(() => createEngine(), []);
-  const [engineState, setEngineState] = useState({ status: engine.status, progress: 0, phase: /** @type {'download' | 'init'} */ ('download'), model: engine.model.id, error: '' });
+  const [models, setModels] = useState(() => ({ swift: engine.state('swift'), hd: engine.state('hd') }));
   const [hydrated, setHydrated] = useState(false);
 
   const [favorites, setFavorites] = useState(/** @type {string[]} */ ([]));
@@ -102,7 +108,7 @@ function useStoreValue() {
   const previewAbort = useRef(/** @type {AbortController | null} */ (null));
   const generateAbort = useRef(/** @type {AbortController | null} */ (null));
 
-  useEffect(() => engine.subscribe(setEngineState), [engine]);
+  useEffect(() => engine.subscribe(setModels), [engine]);
 
   const toast = useCallback((/** @type {string} */ message, tone = 'info') => {
     const id = Date.now() + Math.random();
@@ -113,16 +119,69 @@ function useStoreValue() {
   // Restore after mount, so the server render and the first client render
   // agree, then start fetching the model in the background.
   useEffect(() => {
-    setFavorites(read(KEY.favorites, VOICES.slice(0, 6).map((v) => v.id)).filter((id) => id.startsWith('m-') || VOICES.some((v) => v.id === id)));
+    setFavorites(read(KEY.favorites, VOICES.slice(0, 6).map((v) => v.id)));
     setCustom(read(KEY.custom, []));
     setHistory(read(KEY.history, []));
     setSettings({ ...DEFAULT_SETTINGS, ...read(KEY.settings, {}) });
     setVoiceId(read(KEY.voice, DEFAULT_VOICE_ID));
-    const model = read(KEY.model, 'swift');
     setHydrated(true);
-    const start = model !== 'swift' ? engine.setModel(model) : engine.load();
-    Promise.resolve(start).catch((e) => toast(`Model failed to load: ${e.message}`, 'error'));
+    // Ask the browser not to evict the weights when space runs low.
+    navigator.storage?.persist?.().catch(() => {});
+    engine.load('swift').catch((e) => toast(`Swift failed to load: ${e.message}`, 'error'));
   }, [engine, toast]);
+
+  /** Try a model that failed to load again. */
+  const retryModel = useCallback((/** @type {'swift' | 'hd'} */ id) => {
+    engine.load(id).catch((e) => toast(`${id === 'swift' ? 'Swift' : 'HD'} failed to load: ${e.message}`, 'error'));
+  }, [engine, toast]);
+
+  // A download that failed for want of a network resumes when it returns.
+  useEffect(() => {
+    const onOnline = () => {
+      for (const id of /** @type {const} */ (['swift', 'hd'])) {
+        if (engine.state(id).status === 'error') retryModel(id);
+      }
+    };
+    addEventListener('online', onOnline);
+    return () => removeEventListener('online', onOnline);
+  }, [engine, retryModel]);
+
+  // While the model works, the interface steps out of its way: the ambient
+  // animations pause (see globals.css), so the CPU goes to speech.
+  useEffect(() => {
+    if (generating) document.documentElement.dataset.busy = '';
+    else delete document.documentElement.dataset.busy;
+  }, [generating]);
+
+  // The app shell is kept by a service worker, so with the weights in cache
+  // the whole playground works with the network off. Production only: in
+  // development it would serve stale code.
+  const [offlineReady, setOfflineReady] = useState(false);
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    if (process.env.NODE_ENV !== 'production') {
+      // A worker left by a production run on this port would serve old code.
+      navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
+      return;
+    }
+    navigator.serviceWorker.register('/sw.js').then(async (reg) => {
+      await navigator.serviceWorker.ready;
+      // The first visit loaded its files before the worker existed; hand it the list.
+      const urls = [location.pathname, ...performance.getEntriesByType('resource').map((r) => r.name)]
+        .filter((u) => new URL(u, location.href).origin === location.origin);
+      reg.active?.postMessage({ type: 'keep', urls });
+    }).catch(() => { /* no offline shell; online use is unaffected */ });
+  }, []);
+  useEffect(() => {
+    if (models.swift.status !== 'ready') return;
+    let live = true;
+    const check = () => engine.onDevice('swift').then((ok) => {
+      if (live) setOfflineReady(ok && !!navigator.serviceWorker?.controller);
+    });
+    check();
+    navigator.serviceWorker?.addEventListener('controllerchange', check);
+    return () => { live = false; navigator.serviceWorker?.removeEventListener('controllerchange', check); };
+  }, [engine, models.swift.status]);
 
   useEffect(() => { if (hydrated) write(KEY.favorites, favorites); }, [hydrated, favorites]);
   useEffect(() => { if (hydrated) write(KEY.custom, custom); }, [hydrated, custom]);
@@ -133,15 +192,27 @@ function useStoreValue() {
   const voices = useMemo(() => [...custom, ...VOICES], [custom]);
   const byId = useMemo(() => new Map(voices.map((v) => [v.id, v])), [voices]);
   const voice = byId.get(voiceId) ?? VOICES[0];
+  const activeModel = MODELS.find((m) => m.id === voice.model) ?? MODELS[0];
+  const engineState = models[activeModel.id];
+
+  // The HD model is large; fetch it only once an HD voice is actually chosen.
+  useEffect(() => {
+    if (hydrated && voice.model === 'hd') engine.load('hd').catch((e) => toast(`HD failed to load: ${e.message}`, 'error'));
+  }, [hydrated, voice.model, engine, toast]);
 
   const toggleFavorite = useCallback((/** @type {string} */ id) => {
     setFavorites((f) => (f.includes(id) ? f.filter((x) => x !== id) : [id, ...f]));
   }, []);
 
-  const setModel = useCallback((/** @type {string} */ id) => {
-    write(KEY.model, id);
-    engine.setModel(id).catch((e) => toast(`Model failed to load: ${e.message}`, 'error'));
-  }, [engine, toast]);
+  /**
+   * Switch model by switching voice: to a saved voice of that model if there
+   * is one, otherwise to the model's first voice.
+   */
+  const chooseModel = useCallback((/** @type {'swift' | 'hd'} */ id) => {
+    if (voice.model === id) return;
+    const next = favorites.map((f) => byId.get(f)).find((v) => v?.model === id) ?? VOICES.find((v) => v.model === id);
+    if (next) setVoiceId(next.id);
+  }, [voice.model, favorites, byId]);
 
   /**
    * Audition a voice. The first time renders its sample (the model must be
@@ -156,16 +227,16 @@ function useStoreValue() {
       setPreviewing(null);
       return;
     }
-    const meta = { id, kind: /** @type {const} */ ('preview'), title: v.name, subtitle: 'Voice preview', voiceId: v.id, sampleRate: SAMPLE_RATE };
+    const meta = { id, kind: /** @type {const} */ ('preview'), title: v.name, subtitle: 'Voice preview', voiceId: v.id };
     previewAbort.current?.abort();
     const ctrl = new AbortController();
     previewAbort.current = ctrl;
     const instant = await engine.hasPreview(v);
     if (!instant) setPreviewing(v.id);
     try {
-      const samples = await engine.preview(v, ctrl.signal);
+      const { samples, sampleRate } = await engine.preview(v, ctrl.signal);
       if (ctrl.signal.aborted) return;
-      player.toggleTrack({ ...meta, samples });
+      player.toggleTrack({ ...meta, samples, sampleRate });
     } catch (e) {
       if (/** @type {any} */ (e)?.name !== 'AbortError') toast(`Preview failed: ${/** @type {any} */ (e).message}`, 'error');
     } finally {
@@ -187,7 +258,7 @@ function useStoreValue() {
     generateAbort.current = ctrl;
     const id = `g-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const stream = autoplay
-      ? player.stream({ id, kind: 'generation', title: v.name, subtitle: clean, voiceId: v.id, sampleRate: SAMPLE_RATE })
+      ? player.stream({ id, kind: 'generation', title: v.name, subtitle: clean, voiceId: v.id, sampleRate: rateOf(v) })
       : null;
     setGenerating(true);
     try {
@@ -204,16 +275,18 @@ function useStoreValue() {
         model: result.stats.model,
         createdAt: Date.now(),
         seconds: result.stats.seconds,
+        sampleRate: result.sampleRate,
         stats: {
           rtf: result.stats.rtf, ttfaMs: result.stats.ttfaMs,
           elapsedMs: result.stats.elapsedMs, backend: result.stats.backend,
+          ...stream?.gaps(),
         },
         source,
       };
       cache.current.set(id, result.samples);
       keepAudio(id, result.samples);
       setHistory((h) => [entry, ...h]);
-      return { entry, samples: result.samples };
+      return { entry, samples: result.samples, sampleRate: result.sampleRate };
     } catch (e) {
       stream?.fail();
       toast(`Generation failed: ${/** @type {any} */ (e).message}`, 'error');
@@ -249,7 +322,7 @@ function useStoreValue() {
       const samples = await audioFor(entry);
       player.toggleTrack({
         id: entry.id, kind: 'generation', title: entry.voiceName, subtitle: entry.text,
-        voiceId: entry.voiceId, samples, sampleRate: SAMPLE_RATE,
+        voiceId: entry.voiceId, samples, sampleRate: entry.sampleRate,
       });
     } catch (e) {
       toast(`Could not play: ${/** @type {any} */ (e).message}`, 'error');
@@ -281,13 +354,13 @@ function useStoreValue() {
   }, []);
 
   return {
-    engine, engineState, hydrated,
+    engine, engineState, models, activeModel, hydrated, retryModel, offlineReady,
     voices, byId, voice, voiceId, setVoiceId,
     favorites, toggleFavorite,
     custom, addClone, removeClone,
     settings, setSettings,
     history, removeEntry, clearHistory, playEntry, audioFor,
-    generating, generate, stop, previewVoice, previewing, setModel,
+    generating, generate, stop, previewVoice, previewing, chooseModel,
     toasts, toast,
   };
 }

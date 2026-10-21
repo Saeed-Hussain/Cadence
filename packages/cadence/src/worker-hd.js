@@ -1,6 +1,6 @@
 /**
- * The engine's thread. Inference never runs on the page's main thread, so the
- * interface stays at sixty frames a second while a paragraph is being spoken.
+ * The HD path's thread: Kokoro-82M. Inference never runs on the page's main
+ * thread, so the interface stays smooth while a paragraph is being spoken.
  *
  * Requests run one at a time, in order. A cancelled request stops at the next
  * sentence boundary.
@@ -21,6 +21,7 @@ self.onmessage = (/** @type {MessageEvent} */ { data }) => {
       device: data.device,
       dtype: data.dtype,
       expectedMb: data.expectedMb,
+      wasmPaths: data.wasmPaths,
       onProgress: (progress, phase) => self.postMessage({ type: 'progress', progress, phase }),
     });
     loading.then(

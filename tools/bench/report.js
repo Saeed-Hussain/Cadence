@@ -15,7 +15,7 @@ const mark = (/** @type {number} */ rtf) => (rtf < 0.3 ? ' ✅' : rtf < 1 ? ' �
 
 export async function writeReport() {
   const all = await readdir(new URL('bench/', DOCS));
-  const machines = all.filter((f) => f.endsWith('.json') && !f.includes('.browser.'));
+  const machines = all.filter((f) => f.endsWith('.json') && !f.includes('.browser.') && !f.includes('.app.'));
 
   let md = `# Benchmarks
 
@@ -48,6 +48,17 @@ regenerated in the same commit. A slower number is published, not hidden.
       if (r.error) { md += `| ${r.label} | ${r.params} | failed: ${r.error} | | | | |\n`; continue; }
       const rtf = r.results.long.rtf;
       md += `| ${r.label} | ${r.params} | **${rtf.toFixed(3)}**${mark(rtf)} | ${r.results.short.rtf.toFixed(3)} | ${Math.round(r.results.short.ttfaMs)} ms | ${(r.loadMs / 1000).toFixed(1)} s | ${r.peakRssMb} MB |\n`;
+    }
+
+    const appFile = f.replace(/\.json$/, '.app.json');
+    if (all.includes(appFile)) {
+      const app = JSON.parse(await readFile(new URL(`bench/${appFile}`, DOCS), 'utf8'));
+      if (app.swift) {
+        const { chrome, date, voice, readyMs, median, runs: appRuns, consoleErrors } = app.swift;
+        md += `\n### In the app · Swift, voice ${voice}\n\n${chrome.replace('/', ' ')} · ${date} · production build, long passage, median of ${appRuns.length}\n\n`;
+        md += '| RTF | First audio | Audio | Model ready (cached) | Console errors |\n|---|---|---|---|---|\n';
+        md += `| **${median.rtf.toFixed(3)}**${mark(median.rtf)} | ${Math.round(median.ttfaMs)} ms | ${median.audioS.toFixed(1)} s | ${(readyMs / 1000).toFixed(1)} s | ${consoleErrors} |\n`;
+      }
     }
 
     const browserFile = f.replace(/\.json$/, '.browser.json');

@@ -11,12 +11,13 @@ import { useStore } from '@/lib/store.jsx';
 
 /** @typedef {{id: string, voiceId: string, text: string}} Block */
 
-const KEY = 'cadence:studio:v2';
+const KEY = 'cadence:studio:v3';
 const GAP_SECONDS = 0.35;
 const RATE = 24000;
 
-const NARRATOR = 'bf_emma';
-const SAILOR = 'am_fenrir';
+// Swift voices, so opening the sample never triggers the HD download.
+const NARRATOR = 's-3922';
+const SAILOR = 's-8758';
 
 const SAMPLE = {
   title: 'The Lighthouse — Chapter One',

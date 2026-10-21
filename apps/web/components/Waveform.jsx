@@ -15,6 +15,12 @@ export function Waveform({ samples, progress, onSeek, bars = 140, height = 40 })
   const [size, setSize] = useState({ w: 0, dpr: 1 });
   const [theme, setTheme] = useState(0);
   const data = useMemo(() => peaks(samples, bars), [samples, bars]);
+  // Theme colours, read once per theme rather than on every redraw.
+  const colors = useMemo(() => {
+    if (typeof document === 'undefined') return { played: '', rest: '', accent: '' };
+    const css = getComputedStyle(document.documentElement);
+    return { played: css.getPropertyValue('--ink').trim(), rest: css.getPropertyValue('--ink-4').trim(), accent: css.getPropertyValue('--accent').trim() };
+  }, [theme]);
 
   useEffect(() => {
     const el = canvas.current;
@@ -37,10 +43,7 @@ export function Waveform({ samples, progress, onSeek, bars = 140, height = 40 })
     g.scale(dpr, dpr);
     g.clearRect(0, 0, w, height);
 
-    const css = getComputedStyle(document.documentElement);
-    const played = css.getPropertyValue('--ink').trim();
-    const rest = css.getPropertyValue('--ink-4').trim();
-    const accent = css.getPropertyValue('--accent').trim();
+    const { played, rest, accent } = colors;
 
     const gap = 2;
     const bw = Math.max(1.5, (w - gap * (bars - 1)) / bars);
@@ -54,7 +57,7 @@ export function Waveform({ samples, progress, onSeek, bars = 140, height = 40 })
       g.roundRect(x, (height - h) / 2, bw, h, bw / 2);
       g.fill();
     }
-  }, [data, progress, size, hover, height, bars, theme]);
+  }, [data, progress, size, hover, height, bars, colors]);
 
   /** @param {React.PointerEvent} e */
   const fraction = (e) => {

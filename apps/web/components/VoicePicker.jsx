@@ -37,7 +37,7 @@ export function VoicePicker({ value, onChange, variant = 'full' }) {
           <>
             <span className="grow">
               <b>{voice?.name ?? 'Choose a voice'}</b>
-              <span>{voice ? `${cap(voice.gender)} · ${voice.accent} · ${voice.kind === 'original' ? 'Original' : voice.kind === 'blend' ? 'Blend' : 'Yours'}` : ''}</span>
+              <span>{voice ? `${voice.model === 'hd' ? 'HD' : 'Swift'} · ${cap(voice.gender)} · ${voice.tags.join(', ')}` : ''}</span>
             </span>
             <Icon name="chevronDown" size={16} className="faint" />
           </>
@@ -104,7 +104,7 @@ function PickerPanel({ anchor, value, onPick, onClose }) {
     const needle = q.trim().toLowerCase();
     const pool = scope === 'mine' && !needle ? voices.filter((v) => favorites.includes(v.id)) : voices;
     return needle
-      ? pool.filter((v) => `${v.name} ${v.accent} ${v.gender} ${v.kind} ${v.tags.join(' ')}`.toLowerCase().includes(needle))
+      ? pool.filter((v) => `${v.name} ${v.accent} ${v.gender} ${v.model === 'hd' ? 'hd' : 'swift'} ${v.tags.join(' ')}`.toLowerCase().includes(needle))
       : pool;
   }, [q, scope, voices, favorites]);
 
@@ -192,7 +192,7 @@ function PickerRow({ voice, selected, hot, onPick, onHover }) {
       <span style={{ flex: 1, minWidth: 0 }}>
         <b style={{ display: 'block', fontSize: 13.5, fontWeight: 600 }}>{voice.name}</b>
         <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {cap(voice.gender)} · {voice.accent} · {voice.grade} · {voice.tags.join(', ')}
+          {voice.model === 'hd' ? 'HD' : 'Swift'} · {cap(voice.gender)} · {voice.pitch} Hz · {voice.tags.join(', ')}
         </span>
       </span>
       {selected && <Icon name="check" size={16} />}
