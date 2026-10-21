@@ -97,3 +97,36 @@ export async function loadPiper({ ort, model, config, sessionOptions = {} }) {
 export function sentences(text) {
   return (text.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) ?? [text]).map((s) => s.trim()).filter(Boolean);
 }
+
+/**
+ * The pieces the engine streams, planned so playback never waits.
+ *
+ * Piece k+1 is generated while piece k plays, so a gap opens whenever a piece
+ * takes longer to make than the one before it takes to hear. Sentences longer
+ * than a cap are split at clause punctuation, or failing that between words,
+ * and the cap grows piece by piece: a short first piece for quick first
+ * audio, then longer ones once playback is ahead of the engine.
+ *
+ * @param {string} text
+ * @param {{first?: number, growth?: number, max?: number}} [options]  caps, in characters
+ */
+export function chunks(text, { first = 120, growth = 1.6, max = 260 } = {}) {
+  /** @type {string[]} */
+  const out = [];
+  let cap = first;
+  for (const s of sentences(text)) {
+    let rest = s;
+    while (rest.length > cap) {
+      const head = rest.slice(0, cap);
+      const clause = Math.max(head.lastIndexOf(', '), head.lastIndexOf('; '), head.lastIndexOf(': '), head.lastIndexOf(' — '));
+      const space = head.lastIndexOf(' ');
+      const cut = clause > cap * 0.4 ? clause + 1 : space > 0 ? space : cap;
+      out.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
+      cap = Math.min(max, Math.round(cap * growth));
+    }
+    if (rest) out.push(rest);
+    cap = Math.min(max, Math.round(cap * growth));
+  }
+  return out;
+}

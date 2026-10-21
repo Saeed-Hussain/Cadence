@@ -68,7 +68,7 @@ export default function VoiceCloning() {
       <div className="page-head">
         <div>
           <h1>Voice Cloning</h1>
-          <p className="sub">Record a few seconds and Cadence finds the voice that fits yours, blended from the library. True cloning arrives with the Cadence Clone model. Your audio never leaves this device.</p>
+          <p className="sub">Record a few seconds and Cadence finds the library voice closest to yours, by measured pitch. True cloning arrives with the Cadence Clone model. Your audio never leaves this device.</p>
         </div>
       </div>
 

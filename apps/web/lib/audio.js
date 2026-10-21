@@ -13,7 +13,9 @@ import { useSyncExternalStore } from 'react';
  *
  * A track can be a stream: playback starts on the first sentence while the
  * engine is still producing the rest, and each new sentence is scheduled to
- * begin exactly where the previous one ends.
+ * begin exactly where the previous one ends. When a piece arrives after the
+ * one before it finished playing, the listener heard silence: the stream
+ * counts those gaps, so "no gaps" is a measurement, not a hope.
  */
 
 /**
@@ -174,6 +176,9 @@ export const player = {
     raf = requestAnimationFrame(tick);
 
     const mine = () => state.track?.id === meta.id;
+    let pieces = 0;
+    let gaps = 0;
+    let gapSeconds = 0;
     return {
       /** @param {Float32Array} chunk */
       push(chunk) {
@@ -189,6 +194,13 @@ export const player = {
         const piece = cc.createBuffer(1, chunk.length, meta.sampleRate);
         piece.copyToChannel(new Float32Array(chunk), 0);
         const when = Math.max(scheduledEnd, cc.currentTime + 0.02);
+        // Anything later than the end of the last piece is silence the
+        // listener heard (the first piece's wait is first-audio time instead).
+        // Small scheduling slack is not a gap.
+        if (pieces++ > 0 && when - scheduledEnd > 0.03) {
+          gaps++;
+          gapSeconds += when - scheduledEnd;
+        }
         // The engine fell behind: the clock ran on through silence. Move the
         // track's origin so the playhead does not count the gap as audio.
         startedAt += when - scheduledEnd;
@@ -201,6 +213,10 @@ export const player = {
       /** The engine gave up; keep what arrived. */
       fail() {
         if (mine()) set({ streaming: false });
+      },
+      /** Playback gaps so far: how many, and how long in total. */
+      gaps() {
+        return { gaps, gapMs: Math.round(gapSeconds * 1000) };
       },
     };
   },

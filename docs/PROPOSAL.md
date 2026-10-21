@@ -1,240 +1,168 @@
 # Cadence
 
-## A speech synthesis engine that runs anywhere
+## The fastest high-quality local voice engine
 
 **Author:** Saeed Hussain — Full-Stack Software Engineer, AiroxLab
-**Date:** 19 September 2026
-**Status:** In progress — M0 done 3 October 2026; M2 (kernels) next
+**Date:** 19 September 2026, revised 9 October 2026
+**Status:** Building the MVP — model chosen by measurement (M0 done); making the engine reliable (M1) now
 **Roadmap entry:** `PROJECTS-ROADMAP.md` #16
-**Languages:** JavaScript (ES2023+) · WebAssembly SIMD · WGSL · PyTorch for training only
+**Languages:** JavaScript (ES2023+) · WebAssembly · WebGPU where supported
 
 ---
 
-## 1. Summary
+## 1. Vision
 
-Cadence is a text-to-speech and voice-cloning engine in which every compute kernel is
-written by hand. It runs on the machine in front of the user — faster than real time on
-an ordinary CPU with no GPU at all, and faster still on the GPU when one is available.
+A developer-first text-to-speech engine that generates natural, human-quality speech
+directly on the user's device, with no cloud API, no internet connection and no
+per-character fee.
 
-It ships with **a library of more than two hundred built-in male and female voices**,
-selectable immediately and usable without supplying any audio of your own. Voice cloning
-from a reference recording is the second, opt-in path, not the primary way the product
-is used.
+**Natural AI voices. Offline. Private. Fast. No API bills.**
 
-There is no API key, no server, no `transformers.js` and no ONNX Runtime. It is free and
-unlimited for the person using it because the inference is theirs, which is the only
-honest way anything is ever unlimited and free.
-
-The project is delivered in two phases. **Phase 1** builds the inference engine and
-ships a working product. **Phase 2** replaces the model weights with weights trained from
-scratch, ending in a claim very few engineers can make: *I trained the model and I wrote
-the kernels it runs on.*
+Cadence makes high-quality speech generation practical in browsers, desktop
+applications, mobile devices and low-powered hardware. The long-term aim is to be the
+default infrastructure for any application that needs private, offline, low-cost,
+high-quality speech.
 
 ---
 
-## 2. What this project is for
+## 2. The problem
 
-The existing portfolio says *"I ship business software end to end."* That is valuable and
-it is crowded. Cadence makes a second, rarer claim: *"I build the layer underneath."*
+Cloud text-to-speech charges by usage, needs a connection, sends the user's text to
+someone else's servers, and adds a network round trip before the first sound. The local
+alternatives that exist are hard to integrate, heavy on memory and download size, or
+not tuned for the weaker machines most people actually own.
 
-Almost every developer who works with speech integrates a speech API. Almost nobody
-implements speech synthesis, and the small number who do are not doing it in a browser
-tab, on a CPU, in JavaScript. A hand-written SIMD microkernel that turns a neural model
-into something real time without a GPU is work that machine-learning systems engineers
-recognise on sight.
-
-It also has a property no other project on the roadmap has: **the output is audible.** A
-stranger can evaluate it in four seconds by pressing play. Database engines and consensus
-protocols have to be explained; this one does not.
+A developer who wants a voice in their app today chooses between a bill that grows
+with every user and an integration project. Cadence removes that choice.
 
 ---
 
-## 3. The constraint that defines the project
+## 3. The product
 
-**It must be fast on a CPU.** This is not a performance target to be chased after the
-engine works. It is an architectural decision that has to be made before the first line
-is written, because it eliminates most of the model space:
+An optimised speech engine, an SDK, and a local API for developers adding voice to
+their applications.
 
-| Architecture | Why it is ruled out |
-|---|---|
-| Diffusion / flow matching | Runs the network 16–32 times per utterance. Hopeless without a GPU. |
-| Autoregressive token models | Latency grows with output length, and the models are large. |
-| **Non-autoregressive, single pass** | **One forward pass. The only shape that reaches real time on a CPU.** |
+| # | Feature | What it means | Status |
+|---|---|---|---|
+| 1 | **Local inference** | Speech is generated on the user's device | Working in the browser |
+| 2 | **Low-latency streaming** | Audio plays before the whole text is generated | Working: sentence by sentence |
+| 3 | **Hardware optimisation** | CPUs, GPUs, WASM, and WebGPU where supported | WASM measured; WebGPU fails on the fast model (§9) |
+| 4 | **Compact models** | Small download, small memory, simple install | 79 MB fast model, 904 voices in one file |
+| 5 | **Natural voices** | Intelligibility, pronunciation and expression first | Fast model chosen by listening test; text normalisation not yet built |
+| 6 | **Voice customisation** | Consent-based personal voices, with safeguards | Not built — after the MVP (§7) |
+| 7 | **Developer SDK** | Simple JavaScript/TypeScript API, then Node, desktop, mobile | Engine API exists inside the repo; not packaged or documented |
+| 8 | **Offline operation** | Speech keeps working without a connection | Weights and runtime are cached or self-served; not yet tested with the network off |
+| 9 | **Public benchmarks** | Latency, real-time factor, size, memory, quality against alternatives | Speed, size and memory published for 7 candidates on one machine; quality and competitors not yet |
 
-The single-pass lineage is therefore the default path. Choose it on day one, or rewrite
-the engine in month four.
+### 3.1 Signature demo
+
+Turn off Wi-Fi on an older laptop, paste a paragraph, and hear natural speech generated
+locally with minimal delay.
+
+That claim is validated on defined hardware, not assumed. The reference machine is the
+slowest one Cadence must run on: an Intel Core i5-4310U from 2014, 2 cores / 4 threads,
+8 GB RAM. For the demo to be true there, three things must hold, and §8 tracks them: the
+fast model must be faster than real time *inside the app* (not only in a test harness),
+the first sound must arrive in well under a second, and the weights must already be on
+the machine.
 
 ---
 
-## 4. The trade-off, stated rather than hidden
+## 4. Competitive advantage
 
-Speed, quality and zero-shot voice cloning: **pick two.** The small single-pass models
-are fast because they are small. The models that convincingly clone a stranger from ten
-seconds of audio are large and iterative. Nobody has collapsed that, and better kernels
-will not collapse it either.
+Cadence competes on things that can be measured:
 
-So the engine ships two paths behind one interface, and the product is honest about
-which one the user is on:
+- **Performance on constrained hardware** — measurably better than the alternatives on
+  the reference machine, published with the losses included.
+- **A simple developer experience** — a voice in a few lines of code, no server to run.
+- **Compact, optimised inference** — small downloads, small memory, fast first audio.
+- **Reliable cross-platform packaging** — the same engine in a browser, Node and desktop.
+- **Strong voice quality at practical resource requirements.**
+- **Privacy and offline operation by construction** — there is no server to send text to.
 
-| | Fast path | Cloning path |
+### 4.1 The honest position today
+
+**The primary risk is already visible:** the engine currently runs open models (Piper,
+Kokoro) on an open runtime (ONNX Runtime). Anything Cadence does today, a developer could
+assemble from the same parts. Local inference alone is not an advantage.
+
+The advantage has to be earned in four places, in this order:
+
+1. **Reliability and integration** — one package that loads, streams, caches, works
+   offline and handles failure, instead of a weekend of glue code.
+2. **Measured performance on weak hardware** — M0 found where the time goes: in the
+   browser, 82% of the fast model's time is convolution, in a shape (few channels, very
+   long sequences) the generic runtime handles poorly. That is a concrete, measurable
+   opening for specialised kernels — scheduled after the engine is reliable (§7).
+3. **Curated voices** — the 904 speakers vary in quality; a tested, named, labelled set
+   is work a developer would otherwise have to do.
+4. **Public, reproducible benchmarks** — the claim and the means to check it, together.
+
+---
+
+## 5. Target customers
+
+- Application and game developers.
+- E-learning platforms.
+- Accessibility software developers.
+- E-book and reading applications.
+- Desktop and mobile application builders.
+- Enterprise and embedded-device manufacturers.
+
+---
+
+## 6. Business model
+
+- A free personal tier.
+- Paid developer subscriptions.
+- Commercial application licences.
+- Enterprise and embedded deployment licences.
+- Optional paid voice packs or customisation features.
+
+Pricing is validated with real developers before it is fixed. Every paid tier depends on
+the licensing question in §9 being resolved first.
+
+---
+
+## 7. MVP scope
+
+The smallest product that proves the core advantage. Anything outside it waits until
+the engine is reliable.
+
+| # | MVP item | Status |
 |---|---|---|
-| **Default** | Yes | Opt-in |
-| **Runs on** | CPU, any machine | GPU via WebGPU |
-| **Model** | Small, non-autoregressive | Larger, cloning-capable |
-| **Voices** | 200+ built-in, male and female | Any voice, from ~10 s of reference audio |
-| **Speed** | Faster than real time | Slower, still local |
-| **Purpose** | Makes "unlimited" true everywhere | Makes the feature list complete |
+| 1 | **One reliable speech model** | Chosen: Piper LibriTTS-R (§10). Not yet reliable *in the app* (§8) |
+| 2 | **A working local inference engine** | Working in a Web Worker, streaming, cached |
+| 3 | **A browser playground** | Built — wider than the MVP needs (see below) |
+| 4 | **A simple JavaScript SDK** | Not started as a product: no package, no docs, no types |
+| 5 | **Streaming audio output** | Working |
+| 6 | **Reproducible performance benchmarks** | `npm run bench`, `bench:browser`, `bench:app`, published |
+| 7 | **Basic licensing and documentation** | No LICENSE yet; third-party terms listed in the README; GPL question open |
 
-One engine, two model sizes, one kernel interface. The interface is the engineering. The
-honesty about which path is active is the product design.
+**Deliberately after the MVP:** voice cloning and personal voices (with consent and
+safeguards), specialised kernels, WebGPU, desktop and mobile packaging, more languages,
+training Cadence's own weights.
 
-### 4.1 The voice library
-
-A large built-in voice set is cheap in exactly the way it looks expensive. In a
-multi-speaker model a voice is **not a model — it is a speaker embedding**, a single
-vector of a few hundred floats. Two hundred voices is therefore a few hundred kilobytes
-of data shipped alongside one model, not two hundred models to store, load or download.
-The library costs effectively nothing at runtime, and adding the two-hundred-and-first
-voice costs nothing either.
-
-Three things supply the voices:
-
-1. **The training corpus.** Open multi-speaker speech corpora contain hundreds to
-   thousands of distinct speakers. A model trained across them yields an embedding per
-   speaker as a by-product.
-2. **Sampling the embedding space.** Voices that belong to no real person can be
-   generated by sampling and interpolating within the learned speaker space. This is the
-   same mechanism as voice design, and it means the library is not capped by the corpus.
-   It is also the ethically cleaner source, since a synthetic voice impersonates nobody.
-3. **Curation, which is the actual work.** Raw corpus speakers are uneven — noisy
-   recordings, thin coverage, unpleasant timbre. Reaching two hundred *good* voices means
-   auditioning many more, rejecting most, then labelling what survives by gender, age
-   range, accent, and timbre, naming them, and building a picker that makes the set
-   browsable rather than a list of identifiers.
-
-The engineering here is modest; the curation and the labelling are not, and they are
-scheduled as real work rather than assumed.
-
-### 4.2 Auditioning a voice before using it
-
-The user journey is **browse, listen, pick, generate**. That requires a short audio
-sample for every voice in the library, and those samples are pre-rendered rather than
-synthesised on demand, for two reasons:
-
-- **Scrolling a list of two hundred voices needs instant playback.** Half a second of
-  inference per click is tolerable once and irritating on the twentieth voice.
-- **The picker then works before the model has finished loading.** Model download is the
-  slowest part of first use. Pre-rendered samples let someone browse and choose during
-  it, which converts dead waiting time into the most interesting part of the product.
-
-The samples are cheap. Roughly five seconds of Opus per voice is on the order of 15 kB,
-so the full set lands near 3 MB, lazy-loaded as the list scrolls and cached thereafter.
-They are generated by the engine itself as the last step of curation: adding a voice
-generates its sample, so the library and its previews cannot drift apart.
-
-**A flat list of two hundred voices is unusable**, so the picker is a real deliverable
-and not a dropdown. It needs search, filtering by gender, age range, accent and language,
-an inline play control on every row, and a way to keep the handful of voices a given user
-actually returns to. Custom preview text — hearing a voice say *your* sentence rather
-than the canned one — is the live-engine path, and the obvious bridge from browsing into
-generating.
+The playground currently also has a long-form studio, a history page, a pitch-matching
+stand-in for cloning and a "voice changer" placeholder. They are outside the MVP. They
+stay only if they cost nothing in reliability; the cloning stand-in should be hidden or
+clearly labelled until real, consent-based customisation exists.
 
 ---
 
-## 5. Architecture
+## 8. Plan
 
-<img src="diagram-architecture.svg" alt="Cadence architecture: a five-stage synthesis pipeline over one kernel interface with a CPU backend and a GPU backend beneath it" />
+Milestones are done when their number is measured on the reference machine and
+published, not when the code exists.
 
-Both voice sources converge on the same input to the acoustic model: a speaker embedding.
-Selecting a built-in voice is a lookup in the library; cloning runs the reference audio
-through the speaker encoder to produce the same kind of vector. Everything downstream is
-identical, which is why the built-in library costs the engine nothing.
-
-The boundary that matters is the **kernel interface**. Model code is written once against
-an operator set — `gemm`, `conv`, `attention`, activations — and each backend implements
-that set. The same operator tests run against both, so a disagreement between CPU and GPU
-output is a test failure rather than a mystery.
-
-Above it, nothing knows a web framework exists. `packages/cadence` is a plain JavaScript
-package importable from Node, from a browser and from Electron. `apps/web` is the Next.js
-demo that makes it visible, and it imports the engine, never the reverse.
-
----
-
-## 6. Scope
-
-The commercial products in this space are not one model; they are roughly seven model
-families. Attempting all of them in one repository produces an abandoned repository.
-Synthesis is the coherent half, and it is already a year of work.
-
-| Feature | In scope | Where, or why not |
+| Milestone | Done means | Status |
 |---|---|---|
-| Text to speech, multilingual | **Yes** | Phase 1, both backends |
-| 200+ built-in male and female voices | **Yes** | Phase 1, CPU path — embeddings, not models |
-| A pre-rendered sample for every voice | **Yes** | Phase 1 — generated by the engine during curation |
-| Searchable, filterable voice picker | **Yes** | Phase 1, the Next.js demo |
-| Streaming with low time-to-first-audio | **Yes** | Phase 1 |
-| Long-form editor with per-line control | **Yes** | Phase 1, the Next.js demo |
-| Instant voice cloning from seconds of audio | **Yes** | Phase 1, GPU path |
-| Professional cloning by fine-tuning | **Yes** | Phase 2, reuses the training pipeline |
-| Voice design from a text description | **Yes** | Phase 2, sampling the speaker-embedding space |
-| Speech to speech / voice conversion | **Yes** | Phase 2, same conditioning, different encoder |
-| Speech to text | No | A separate ASR engine, and its own project |
-| Dubbing | No | Needs ASR, translation and forced alignment on top |
-| Sound-effect and music generation | No | Different model families entirely |
-| Voice isolation and denoise | No | Source separation — belongs with the audio DSP project |
-
----
-
-## 7. Plan
-
-<img src="diagram-timeline.svg" alt="Schedule: Phase 1 runs from week zero to week eighteen, Phase 2 from week eighteen to week forty-four" />
-
-### Phase 1 — the engine (weeks 0–18)
-
-Validated against existing open weights, used strictly as data and as a correctness
-reference. Ends in a finished, shippable, offline product.
-
-| Milestone | Week | Done means |
-|---|---|---|
-| **M0 — the spike** | 2 | A throwaway prototype reports a real-time factor on the target CPU. The number decides the model size before anything else is built. |
-| **M1 — it speaks** | 6 | Text normalisation and G2P produce correct phonemes for a held-out test set. |
-| **M2 — it is fast** | 10 | The SIMD GEMM microkernel beats the naive implementation by an order of magnitude, with the number published. |
-| **M3 — it is audible** | 14 | End-to-end synthesis through the vocoder, streaming to an AudioWorklet with no underruns. |
-| **M4 — it is portable** | 16 | The GPU backend passes the same operator tests as the CPU backend. |
-| **M4b — it has voices** | 18 | 200+ voices auditioned, filtered, labelled by gender, age and accent. Every voice has a generated sample, and the picker makes them searchable and playable before the model loads. |
-| **M5 — it ships** | 18 | Cloning path, editor, deployed demo, README, benchmarks, design document. |
-
-### Phase 2 — the weights (weeks 18–44)
-
-| Milestone | Week | Done means |
-|---|---|---|
-| **M6 — the corpus** | 24 | A reproducible data pipeline over open speech corpora. |
-| **M7 — your vocoder** | 30 | A vocoder trained from scratch, swapped in, with an honest quality comparison. |
-| **M8 — your model** | 40 | An acoustic model trained from scratch, and the end-to-end claim becomes true. |
-| **M9 — the rest** | 44 | Voice design and speech-to-speech built on the trained embedding space. |
-
-The ordering is the risk strategy. Phase 2 needs rented GPUs and can stall on budget;
-Phase 1 cannot, and leaves a defensible finished project standing either way.
-
----
-
-## 8. How success is measured
-
-Every number below is published in the README, measured on named hardware, including the
-cases where it loses to the commercial products.
-
-| Metric | Target | Why this one |
-|---|---|---|
-| **Real-time factor, CPU** | < 0.3 on 4 threads, no GPU | The headline claim. Anyone can verify it by running it. |
-| **Time to first audio** | < 200 ms | What "fast" actually feels like. Throughput matters less than this. |
-| **Real-time factor, GPU** | Well under CPU, measured | Proves the second backend earns its existence. |
-| **Memory ceiling** | Runs in a browser tab without crashing it | Quantisation is load-bearing, not decorative. |
-| **Voice library size** | 200+ voices in well under 1 MB | Proves voices are embeddings and not two hundred models. |
-| **Preview payload** | ~3 MB for the full set, lazy-loaded | Browsing must stay cheap, and must work before the model does. |
-| **Time to first audition** | Playable before the model finishes loading | The picker is the first thing anyone touches. |
-| **Kernel speedup** | ≥ 10× over the naive baseline | The single most defensible piece of engineering in the repo. |
-| **Backend agreement** | CPU and GPU within tolerance | Correctness, tested rather than assumed. |
+| **M0 — Measure and choose** | Real-time factor of every candidate measured on the reference machine; model chosen by the numbers | **Done** 3 Oct 2026 |
+| **M1 — Reliable engine** | In the real app, the fast model is within 15% of the standalone browser number; streams with no gaps; works offline after first load; recovers from a failed download | **In progress** — the app is measured at RTF 2.96 against 0.448 standalone; animations account for about 3× of that (§9) |
+| **M2 — SDK** | `@cadence/engine` packaged with a documented API and types; a working example in a few lines; a Node path on the native runtime | Not started |
+| **M3 — Licensing and documentation** | LICENSE; third-party notices; the phonemiser licence resolved; a getting-started guide | Not started |
+| **M4 — Benchmarks against alternatives** | Speed, first audio, size, memory and a defined quality measure, against plain Piper, Kokoro.js, the browser's built-in speech and at least one cloud API, on three hardware tiers | Not started |
+| **After the MVP** | Specialised convolution kernels for the measured hot path; WebGPU; consent-based voice customisation; desktop and mobile; Cadence's own weights | — |
 
 ---
 
@@ -242,86 +170,98 @@ cases where it loses to the commercial products.
 
 | Risk | Severity | Response |
 |---|---|---|
-| The CPU is simply not fast enough at the needed quality | High | M0 exists to find this out in week two. If the number is bad, the model size is the dial — learn it in week one, not month four. |
-| Phase 2 compute cost runs away | Medium | Phase 1 ships independently. Train the vocoder first: it is cheap, it is a complete result on its own, and it derisks the pipeline. |
-| Scope creep toward the full product surface | High | Section 6 is the contract. ASR, dubbing and music generation are separate projects or they are nothing. |
-| Weight licensing for the Phase 1 reference models | Medium | Verify terms before use; this corner of the ecosystem shifts. Phase 2 removes the dependency entirely. |
-| Voice cloning misuse | Medium | An inaudible watermark in all output and a consent step on reference upload. Reasoned through openly in the design document. |
-| Silent numerical bugs in hand-written kernels | High | Every operator tested against a reference implementation, both backends, from day one. This is where projects like this actually die. |
-| The 200 voices are uneven, or barely distinguishable from each other | Medium | Curation is scheduled work with a rejection rate, not a data dump. A smaller set of genuinely distinct voices beats a padded count. |
+| **Open-source alternatives are already good enough** | **High — the primary risk** | Prove a measured advantage (§4.1) or say so. M4 exists to compare honestly, losses included. |
+| **The interface costs more than the model** | High | Measured: on the reference machine the glass interface's animations made generation about 3× slower (RTF 2.96 → 1.02 with motion reduced). Even then the app is 2.3× slower than the standalone page. M1 finds and removes the rest; the interface must get out of the engine's way while it speaks. |
+| **The phonemiser's licence** | High for paid tiers | The `phonemizer` package is published under Apache-2.0 but bundles eSpeak NG, which is GPL-3.0. A paid commercial licence may be incompatible with shipping it. Needs a proper licence review; alternatives are a permissively licensed phonemiser or a dictionary-based front end. |
+| **One reference machine** | Medium | Every number so far is from one laptop. M4 adds at least two more tiers before any public performance claim. |
+| **The fast model does not run on WebGPU** | Medium | Measured: an unsupported integer operation. CPU WebAssembly is the path; WebGPU waits for kernels or a converted model. |
+| **First use needs a download** | Medium | The demo's "Wi-Fi off" assumes the weights are present. The SDK must offer bundling or pre-caching, and the docs must say so plainly. |
+| **Voice quality is uneven across speakers** | Medium | Curation is real work with a rejection rate: a smaller set of good, named voices beats 904 numbered ones. |
+| **Voice customisation misuse** | Medium, later | Consent capture and safeguards are part of the feature, not an afterthought. |
 
 ---
 
-## 10. Deliverables
+## 10. Technical approach
 
-- `packages/cadence` — the engine. Plain JavaScript, no framework, no bundler assumptions.
-- `packages/cadence-kernels` — the CPU and GPU backends behind one operator interface.
-- `apps/web` — the Next.js demo: the voice picker, playground, long-form editor, live
-  RTF meter.
-- **The voice library as data** — labelled metadata plus a generated sample per voice,
-  built by a repeatable pipeline rather than assembled by hand.
-- A **deployed URL** that synthesises speech with no account and no quota.
-- A **design document**: the architecture, the trade-offs taken knowingly, what would be
-  done differently.
-- **Published benchmarks** on named hardware, including the losses.
-- **A written post** on the SIMD microkernel. That post will reach more people than the
-  repository will.
+### 10.1 The constraint
+
+**It must be fast on a CPU.** That rules out most of the model space before any code:
+
+| Architecture | Verdict |
+|---|---|
+| Diffusion / flow matching | Runs the network 16–32 times per utterance. Too slow without a GPU. |
+| Autoregressive token models | Latency grows with output length; the models are large. |
+| **Non-autoregressive, single pass** | **One forward pass. The only shape that reaches real time on a CPU.** |
+
+### 10.2 The model, chosen by measurement (M0)
+
+Measured on the reference machine; every number in `docs/BENCHMARKS.md`.
+
+- **Default: Piper LibriTTS-R medium.** VITS, about 15M parameters, 904 speakers in one
+  79 MB model. Natively RTF 0.132 with first audio at 200 ms; in the browser 0.448 on
+  one thread. The best-sounding of the fast candidates in a listening test.
+- **Higher quality, opt-in: Kokoro-82M (fp32).** Natively RTF 1.43 on the reference
+  machine — slower than real time there, real time on faster hardware.
+- **Not chosen:** Piper Lessac low and medium (as fast, one voice each), Piper Lessac
+  high (0.91, too close to real time), Kokoro in int8 (2.87, the slowest format measured).
+
+In the browser, one WebAssembly thread was faster than two or four on the two-core
+machine. ONNX Runtime's profiler puts 82% of the browser time in convolution — 70%
+`Conv`, 12% `ConvTranspose` — almost all of it in the vocoder: 32 to 64 channels over
+50,000+ samples, kernels of 3 to 7. That is where specialised kernels would pay.
+
+### 10.3 Voices are speakers, not models
+
+In a multi-speaker model a voice is a speaker index into the same weights. 904 voices
+cost one 79 MB download, and adding a voice costs nothing. Every label in the library —
+register, gender where the pitch supports one, pace — is measured from the voice itself
+(`tools/voices/measure.js`), not guessed.
+
+### 10.4 Architecture
+
+<img src="diagram-architecture.svg" alt="Target architecture: a synthesis pipeline over one kernel interface with a CPU backend and a GPU backend beneath it" />
+
+The diagram is the target. Today the engine sits on ONNX Runtime; the boundary that
+matters is the **engine interface** — load, stream, preview, cancel — which the app is
+written against. `packages/cadence` is plain JavaScript importable from a browser, Node
+or Electron; inference runs in Web Workers so the page never blocks. Swapping the
+runtime underneath for specialised kernels changes nothing above that interface.
 
 ---
 
-## 11. Decisions
+## 11. How success is measured
+
+Developers choose Cadence because it delivers a demonstrably better combination of
+voice quality, latency, memory efficiency and integration simplicity. Each part is a
+number, measured on the reference machine first:
+
+| Metric | Target | Today |
+|---|---|---|
+| Real-time factor, in the app, browser | < 0.3 | 2.96 (1.02 with motion reduced) |
+| Real-time factor, standalone browser | < 0.3 | 0.448 |
+| First audio, in the app | < 500 ms | 16.1 s (3.2 s with motion reduced) |
+| Fast model download | < 100 MB | 79 MB |
+| Peak memory | < 500 MB | 450 MB natively; browser not yet measured |
+| Integration | Speech in a few lines of code | No public SDK yet |
+| Quality | A defined listening-test score against the alternatives | Not yet defined |
+
+---
+
+## 12. Decisions
 
 ### Taken
 
-1. **Which reference weights for Phase 1** — decided by M0 on 3 October 2026, by
-   measurement on the slowest target machine (Intel Core i5-4310U, 2 cores / 4 threads,
-   8 GB). Every number is in `docs/BENCHMARKS.md`.
-   - **Fast path: Piper LibriTTS-R medium.** VITS, about 15M parameters, 904 speakers in
-     one 75 MB model. Natively RTF 0.132 with first audio at 200 ms, inside the 0.3
-     target, and the best-sounding of the fast candidates in a listening test. Its
-     speakers are the built-in library: a speaker index into one model, as §4.1 predicts.
-   - **Higher-quality path: Kokoro-82M, in fp32.** Natively RTF 1.43 here, slower than
-     real time, so it is opt-in rather than the default. Its int8 weights were the
-     slowest format measured (2.87), not the fastest.
-   - **Not chosen:** Piper Lessac low and medium (as fast, one voice each) and Piper
-     Lessac high (0.91, too close to real time to stream reliably).
+1. **Default model: Piper LibriTTS-R medium; Kokoro-82M as the opt-in quality path.**
+   By measurement, 3 October 2026 (§10.2).
+2. **One WebAssembly thread by default** on two-core machines, by measurement.
+3. **The runtime files are served by the app**, not a CDN, so it keeps working offline.
+4. **The MVP comes before kernels, cloning and new platforms** (9 October 2026).
 
-   The fast model in the browser (onnxruntime-web, WebAssembly) runs at RTF 0.448 on one
-   thread: faster than real time, 3.4× slower than native, outside the target. WebGPU
-   does not run it (an unsupported integer `GatherND`). ONNX Runtime's profiler puts 82%
-   of the browser's time in convolution, 70% `Conv` and 12% `ConvTranspose`, almost all
-   of it in the vocoder's residual blocks: 32 to 64 channels over 50,000+ samples,
-   kernels of 3 to 7. That is the shape the M2 kernels are written for.
+### Open
 
-### Still open
-
-1. **Languages at launch** — English only is defensible for Phase 1; multilingual widens
-   the G2P work considerably.
-2. **Electron build or browser only** — Electron gives file-system access for long-form
-   work; the browser gives a link anyone can open. The link probably matters more. M0
-   adds a number: on the target machine the native runtime is 3.4× faster than the
-   browser for the same model, until the M2 kernels close that gap.
-3. **Threading fallback** — `SharedArrayBuffer` requires cross-origin isolation headers.
-   A single-threaded path has to exist for environments that will not supply them. On
-   the two-core target, one thread was measured faster than two or four for the fast
-   model, so the fallback may also be the default there.
-4. **How the voice library is sourced** — corpus speakers, sampled synthetic voices, or a
-   mix. Synthetic voices impersonate nobody, which is the cleaner position, but they need
-   the embedding space to be well behaved first. Decide after M3, when there is something
-   to listen to.
-5. **What the preview samples say** — one identical sentence across all voices makes them
-   directly comparable; varied sentences show range but make comparison harder. Probably
-   one shared sentence, with custom preview text available through the live engine.
-
----
-
-## Two things to go in with, eyes open
-
-**Nobody trains in JavaScript, including you.** Phase 2 is PyTorch on a rented box,
-offline; the exported weights are what the JavaScript engine consumes. The engine is the
-artifact and the engine is pure JavaScript. Say so in the README rather than implying a
-pure-JS pipeline that will not exist.
-
-**This is not branded as a clone of anything.** "Clone of X" reads as derivative. "A
-speech synthesis engine with hand-written SIMD and GPU kernels" reads as systems work.
-Same repository, a different category of reader.
+1. **The phonemiser** — keep eSpeak NG under a GPL review, or replace it.
+2. **How weights reach the device** — download on first use, bundled in the SDK, or both.
+3. **The interface budget** — how much animation the playground can afford on the
+   reference machine while speech is generating.
+4. **Languages at launch** — English only is defensible for the MVP.
+5. **Which competitors and which hardware tiers** M4 measures against.

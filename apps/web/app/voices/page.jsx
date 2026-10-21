@@ -12,13 +12,11 @@ import { useStore } from '@/lib/store.jsx';
 
 /** @typedef {import('@cadence/engine').Voice} Voice */
 
-const TOP = new Set(['A', 'A-', 'B+', 'B', 'B-']);
-
 const COLLECTIONS = [
-  { key: 'top', title: 'Top rated', blurb: 'The clearest, most natural', hue: 260, pick: (/** @type {Voice} */ v) => TOP.has(v.grade) },
-  { key: 'American', title: 'American', blurb: 'US English', hue: 200, pick: (/** @type {Voice} */ v) => v.accent === 'American' },
-  { key: 'British', title: 'British', blurb: 'UK English', hue: 340, pick: (/** @type {Voice} */ v) => v.accent === 'British' },
-  { key: 'blend', title: 'Blends', blurb: 'New voices from the embedding space', hue: 150, pick: (/** @type {Voice} */ v) => v.kind === 'blend' },
+  { key: 'swift', title: 'Swift', blurb: 'Instant on any machine', hue: 150, pick: (/** @type {Voice} */ v) => v.model === 'swift' },
+  { key: 'hd', title: 'HD', blurb: 'Most natural, needs a fast CPU', hue: 260, pick: (/** @type {Voice} */ v) => v.model === 'hd' },
+  { key: 'deep', title: 'Deep voices', blurb: 'Measured under 110 Hz', hue: 220, pick: (/** @type {Voice} */ v) => v.pitch > 0 && v.pitch < 110 },
+  { key: 'high', title: 'Bright voices', blurb: 'Measured over 215 Hz', hue: 330, pick: (/** @type {Voice} */ v) => v.pitch >= 215 },
 ];
 
 const PAGE = 40;
@@ -29,7 +27,8 @@ export default function Voices() {
   const [q, setQ] = useState('');
   const [gender, setGender] = useState('');
   const [accent, setAccent] = useState('');
-  const [kind, setKind] = useState('');
+  const [model, setModel] = useState('');
+  const [pace, setPace] = useState('');
   const [collection, setCollection] = useState('');
   const [shown, setShown] = useState(PAGE);
   const search = useRef(/** @type {HTMLInputElement | null} */ (null));
@@ -55,10 +54,11 @@ export default function Voices() {
     return pool.filter((v) =>
       (!gender || v.gender === gender) &&
       (!accent || v.accent === accent) &&
-      (!kind || v.kind === kind) &&
+      (!model || v.model === model) &&
+      (!pace || v.tags.includes(pace)) &&
       (!col || col.pick(v)) &&
       (!needle || `${v.name} ${v.description} ${v.tags.join(' ')} ${v.accent}`.toLowerCase().includes(needle)));
-  }, [voices, favorites, scope, q, gender, accent, kind, collection]);
+  }, [voices, favorites, scope, q, gender, accent, model, pace, collection]);
 
   useEffect(() => setShown(PAGE), [list]);
 
@@ -73,9 +73,9 @@ export default function Voices() {
     return () => io.disconnect();
   }, [list]);
 
-  const filtered = gender || accent || kind || collection || q;
-  const clear = () => { setGender(''); setAccent(''); setKind(''); setCollection(''); setQ(''); };
-  const originals = VOICES.filter((v) => v.kind === 'original').length;
+  const filtered = gender || accent || model || pace || collection || q;
+  const clear = () => { setGender(''); setAccent(''); setModel(''); setPace(''); setCollection(''); setQ(''); };
+  const swiftCount = VOICES.filter((v) => v.model === 'swift').length;
 
   return (
     <div className="page">
@@ -83,8 +83,8 @@ export default function Voices() {
         <div>
           <h1>Voice Library</h1>
           <p className="sub">
-            {VOICES.length} voices: {originals} originals and {VOICES.length - originals} blends of them. Every voice is a few
-            hundred floats, not a separate model.
+            {VOICES.length} voices: {swiftCount} Swift speakers in one 79 MB model, and {VOICES.length - swiftCount} HD voices.
+            Every label is measured from the voice itself.
           </p>
         </div>
         <div className="page-actions">
@@ -144,7 +144,8 @@ export default function Voices() {
         </div>
         <FilterSelect label="Gender" value={gender} onChange={setGender} options={FACETS.gender} format={cap} />
         <FilterSelect label="Accent" value={accent} onChange={setAccent} options={FACETS.accent} />
-        <FilterSelect label="Type" value={kind} onChange={setKind} options={FACETS.kind} format={cap} />
+        <FilterSelect label="Model" value={model} onChange={setModel} options={FACETS.model} format={(m) => (m === 'hd' ? 'HD' : 'Swift')} />
+        <FilterSelect label="Pace" value={pace} onChange={setPace} options={FACETS.pace} format={cap} />
         {filtered && <button type="button" className="btn btn-ghost btn-sm" onClick={clear}><Icon name="x" size={14} /> Clear</button>}
       </div>
 
@@ -153,7 +154,7 @@ export default function Voices() {
           <span>Voice · {list.length}</span>
           <span>Accent</span>
           <span>Gender</span>
-          <span>Quality</span>
+          <span>Model</span>
           <span />
         </div>
         {list.length === 0 ? (
@@ -187,7 +188,6 @@ function VoiceRow({ voice, current }) {
         <div style={{ minWidth: 0 }}>
           <div className="name">
             {voice.name}
-            {voice.kind === 'original' && <span className="tag">Original</span>}
             {voice.kind === 'matched' && <span className="tag accent">Yours</span>}
             {current && <span className="tag good">In use</span>}
           </div>
@@ -197,8 +197,9 @@ function VoiceRow({ voice, current }) {
       <div className="cell">{voice.accent}<small>{voice.language}</small></div>
       <div className="cell">{cap(voice.gender)}<small>{voice.pitch} Hz</small></div>
       <div className="cell">
-        <span className={`tag mono${TOP.has(voice.grade) ? ' good' : ''}`}>{voice.grade}</span>
-        <small style={{ display: 'inline', marginLeft: 8 }}>{voice.kind === 'blend' ? 'blend' : voice.kind}</small>
+        <span className={`tag${voice.model === 'swift' ? ' good' : ' accent'}`}>{voice.model === 'swift' ? 'Swift' : 'HD'}</span>
+        {voice.model === 'hd' && <small style={{ display: 'inline', marginLeft: 8 }}>grade {voice.grade}</small>}
+        {voice.wordsPerMinute && <small style={{ display: 'inline', marginLeft: 8 }}>{voice.wordsPerMinute} wpm</small>}
       </div>
       <div className="vrow-actions">
         <button

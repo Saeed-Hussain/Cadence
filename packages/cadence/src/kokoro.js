@@ -15,7 +15,7 @@
  * Node for tests. It never touches the DOM.
  */
 
-import { KokoroTTS, TextSplitterStream } from 'kokoro-js';
+import { KokoroTTS, TextSplitterStream, env } from 'kokoro-js';
 
 export const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 export const SAMPLE_RATE = 24000;
@@ -101,9 +101,11 @@ export function embedding(spec) {
 
 /**
  * @param {{device?: 'wasm' | 'webgpu' | 'cpu', dtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16',
- *   expectedMb?: number, onProgress?: (fraction: number, phase: 'download' | 'init') => void}} options
+ *   expectedMb?: number, wasmPaths?: string, onProgress?: (fraction: number, phase: 'download' | 'init') => void}} options
  */
-export async function loadKokoro({ device = 'wasm', dtype = 'q8', expectedMb = 92, onProgress } = {}) {
+export async function loadKokoro({ device = 'wasm', dtype = 'fp32', expectedMb = 326, wasmPaths, onProgress } = {}) {
+  // Served by the app itself rather than a CDN, so it works offline.
+  if (wasmPaths) env.wasmPaths = wasmPaths;
   /** @type {Map<string, {loaded: number, total: number}>} */
   const files = new Map();
   const tts = await KokoroTTS.from_pretrained(MODEL_ID, {

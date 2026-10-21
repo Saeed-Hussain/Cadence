@@ -13,12 +13,15 @@
     "bench:fetch": "node tools/bench/fetch.js",
     "bench": "node tools/bench/native.js",
     "bench:browser": "node tools/bench/browser.js",
-    "bench:report": "node tools/bench/report.js"
+    "bench:app": "node tools/bench/app.js",
+    "bench:report": "node tools/bench/report.js",
+    "check:offline": "node tools/bench/offline.js"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
+    "onnxruntime-node": "1.21.0",
     "puppeteer-core": "^25.12.0"
   }
 }

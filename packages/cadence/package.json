@@ -4,9 +4,27 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.js"
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./node": {
+      "types": "./node.d.ts",
+      "default": "./src/node.js"
+    }
   },
   "dependencies": {
-    "kokoro-js": "^1.2.1"
+    "kokoro-js": "^1.2.1",
+    "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4",
+    "phonemizer": "^1.2.1"
+  },
+  "types": "./index.d.ts",
+  "peerDependencies": {
+    "onnxruntime-node": ">=1.21.0"
+  },
+  "peerDependenciesMeta": {
+    "onnxruntime-node": {
+      "optional": true
+    }
   }
 }

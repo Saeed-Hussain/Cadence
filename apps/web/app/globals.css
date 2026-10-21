@@ -184,6 +184,11 @@ h1, h2, h3, h4, p { margin: 0; }
 /* The field breathes with whatever is speaking. */
 .backdrop.speaking .blob { opacity: calc(var(--blob-opacity) * 1.25); }
 
+/* While the model is generating, the field holds still: every frame it drifts
+   is a frame every glass panel above it must blur again, and on a two-core
+   machine that time comes out of the speech (docs/PROPOSAL.md §9). */
+:root[data-busy] .blob { animation-play-state: paused; }
+
 /* Grain, so the gradients never band. */
 .grain {
   position: absolute;
@@ -266,6 +271,9 @@ h1, h2, h3, h4, p { margin: 0; }
 }
 .page.wide { max-width: none; }
 .page.fill { height: 100%; display: flex; flex-direction: column; padding-bottom: 20px; }
+/* With the player showing, a full-height page ends above it, so the editor's
+   own buttons are never underneath the bar. */
+.main-scroll:has(> .player-spacer) > .page.fill { height: calc(100% - 96px); padding-bottom: 8px; }
 
 @keyframes page-in {
   from { opacity: 0; transform: translate3d(0, 10px, 0); filter: blur(4px); }
