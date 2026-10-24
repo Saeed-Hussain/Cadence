@@ -15,7 +15,9 @@
  * Node for tests. It never touches the DOM.
  */
 
-import { KokoroTTS, TextSplitterStream, env } from 'kokoro-js';
+import { AutoTokenizer, StyleTextToSpeech2Model, Tensor, env } from '@huggingface/transformers';
+import { kokoroPhonemes, loadLexicon } from './g2p.js';
+import { chunks } from './piper.js';
 
 export const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 export const SAMPLE_RATE = 24000;
@@ -40,13 +42,6 @@ function original(name) {
         const hit = await cache?.match(url);
         if (hit) return new Float32Array(await hit.arrayBuffer());
       } catch { /* no cache, fetch below */ }
-      // Node: kokoro-js ships the voice files; read them, no network needed.
-      if (typeof process !== 'undefined' && process.versions?.node && typeof window === 'undefined' && typeof importScripts === 'undefined') {
-        const fs = await import(/* webpackIgnore: true */ 'node:fs/promises');
-        const file = new URL(`../../../node_modules/kokoro-js/voices/${name}.bin`, import.meta.url);
-        const { buffer } = await fs.readFile(file);
-        return new Float32Array(buffer.slice(0));
-      }
       const buf = await download(url);
       try { await cache?.put(url, new Response(buf.slice(0))); } catch { /* not cached */ }
       return new Float32Array(buf);
@@ -101,67 +96,62 @@ export function embedding(spec) {
 
 /**
  * @param {{device?: 'wasm' | 'webgpu' | 'cpu', dtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16',
- *   expectedMb?: number, wasmPaths?: string, onProgress?: (fraction: number, phase: 'download' | 'init') => void}} options
+ *   expectedMb?: number, wasmPaths?: string, threads?: number, onProgress?: (fraction: number, phase: 'download' | 'init') => void}} options
  */
-export async function loadKokoro({ device = 'wasm', dtype = 'fp32', expectedMb = 326, wasmPaths, onProgress } = {}) {
+export async function loadKokoro({ device = 'wasm', dtype = 'fp32', expectedMb = 326, wasmPaths, threads, onProgress } = {}) {
+  const wasm = env.backends.onnx.wasm;
   // Served by the app itself rather than a CDN, so it works offline.
-  if (wasmPaths) env.wasmPaths = wasmPaths;
+  if (wasmPaths && wasm) wasm.wasmPaths = wasmPaths;
+  if (threads && wasm) wasm.numThreads = threads;
   /** @type {Map<string, {loaded: number, total: number}>} */
   const files = new Map();
-  const tts = await KokoroTTS.from_pretrained(MODEL_ID, {
-    device,
-    dtype,
-    progress_callback: (/** @type {any} */ e) => {
-      // The weights host does not always send a length, so progress is
-      // measured against the size the weights are known to be.
-      if (e.status === 'progress') {
-        files.set(e.file, { loaded: e.loaded ?? 0, total: e.total ?? 0 });
-        let loaded = 0;
-        let total = 0;
-        for (const f of files.values()) { loaded += f.loaded; total += f.total; }
-        total = Math.max(total, expectedMb * 1e6);
-        onProgress?.(Math.min(0.99, loaded / total), 'download');
-      } else if (e.status === 'done' && /\.onnx$/.test(e.file ?? '')) {
-        onProgress?.(0.99, 'init');
-      }
-    },
-  });
+  const progress_callback = (/** @type {any} */ e) => {
+    // The weights host does not always send a length, so progress is
+    // measured against the size the weights are known to be.
+    if (e.status === 'progress') {
+      files.set(e.file, { loaded: e.loaded ?? 0, total: e.total ?? 0 });
+      let loaded = 0;
+      let total = 0;
+      for (const f of files.values()) { loaded += f.loaded; total += f.total; }
+      total = Math.max(total, expectedMb * 1e6);
+      onProgress?.(Math.min(0.99, loaded / total), 'download');
+    } else if (e.status === 'done' && /.onnx$/.test(e.file ?? '')) {
+      onProgress?.(0.99, 'init');
+    }
+  };
+  const [model, tokenizer] = await Promise.all([
+    StyleTextToSpeech2Model.from_pretrained(MODEL_ID, { dtype, device: /** @type {any} */ (device), progress_callback }),
+    AutoTokenizer.from_pretrained(MODEL_ID, { progress_callback }),
+    loadLexicon(),
+  ]);
 
-  // Kokoro only knows voices by name. Teach this instance to take a spec — a
-  // blend of named voices — so the library is not limited to the originals.
-  const t = /** @type {any} */ (tts);
-  t._validate_voice = (/** @type {VoiceSpec} */ spec) => spec.lang;
-  t.generate_from_ids = async (/** @type {any} */ ids, /** @type {{voice: VoiceSpec, speed: number}} */ { voice, speed = 1 }) => {
+  /** @param {string} phonemes @param {VoiceSpec} voice @param {number} speed */
+  const speak = async (phonemes, voice, speed) => {
+    const { input_ids: ids } = tokenizer(phonemes, { truncation: true });
     const table = await embedding(voice);
     const row = STYLE * Math.min(Math.max(ids.dims.at(-1) - 2, 0), 509);
-    const Tensor = ids.constructor;
-    const { waveform } = await tts.model({
+    const { waveform } = await model({
       input_ids: ids,
       style: new Tensor('float32', table.slice(row, row + STYLE), [1, STYLE]),
       speed: new Tensor('float32', [speed], [1]),
     });
-    return { audio: /** @type {Float32Array} */ (waveform.data), sampling_rate: SAMPLE_RATE };
+    return /** @type {Float32Array} */ (waveform.data);
   };
 
   return {
     /**
-     * Synthesise sentence by sentence, handing each chunk over as soon as it
-     * exists — the first one is the time to first audio.
+     * Synthesise piece by piece (see `chunks`), handing each over as soon as
+     * it exists — the first one is the time to first audio.
      *
      * @param {string} text
      * @param {VoiceSpec} voice
      * @param {number} speed
-     * @param {(samples: Float32Array, sentence: string) => void} onChunk
+     * @param {(samples: Float32Array, piece: string) => void} onChunk
      */
     async generate(text, voice, speed, onChunk) {
-      // A string passed to stream() leaves its splitter open and the last
-      // sentence never arrives; a closed splitter flushes it.
-      const sentences = new TextSplitterStream();
-      sentences.push(text);
-      sentences.close();
-      for await (const part of tts.stream(sentences, { voice: /** @type {any} */ (voice), speed })) {
-        const audio = /** @type {any} */ (part.audio).audio;
-        onChunk(trim(audio), part.text);
+      for (const piece of chunks(text)) {
+        const audio = await speak(kokoroPhonemes(piece, voice.lang), voice, speed);
+        onChunk(trim(audio), piece);
       }
     },
   };

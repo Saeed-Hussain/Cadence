@@ -66,7 +66,7 @@ export function cpuThreads() {
 }
 
 /**
- * WebAssembly threads for the Swift model, by measurement:
+ * WebAssembly threads, for both models, by measurement of Swift:
  *   i5-4310U, 2 cores / 4 threads: 1 thread fastest (RTF 0.448; more were slower).
  *   Ryzen 5 7430U, 6 cores / 12 threads: 6 threads RTF 0.105, 12 threads 0.127, 1 thread 0.225.
  * So one thread below eight logical cores, otherwise half of them (the
@@ -89,7 +89,7 @@ export function hasWebGPU() {
  *   wasmPaths: where the app serves the WebAssembly runtime files (see
  *   apps/web/scripts/copy-runtime.js). modelPaths: where it serves the Swift
  *   weights, tried before the internet (apps/web/scripts/fetch-model.js);
- *   null to always use the internet. threads: WebAssembly threads for Swift;
+ *   null to always use the internet. threads: WebAssembly threads for both models;
  *   by default chosen from the hardware (`swiftThreads`).
  */
 export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', threads = swiftThreads() } = {}) {
@@ -200,7 +200,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
         type: 'load',
         wasmPaths: new URL(wasmPaths, location.href).href,
         modelPaths: modelPaths ? new URL(modelPaths, location.href).href : null,
-        threads: id === 'swift' ? threads : undefined,
+        threads,
       });
       return rt.loading;
     },
@@ -268,7 +268,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
       return {
         samples,
         sampleRate: model.sampleRate,
-        stats: { backend: model.id === 'swift' ? `wasm-simd · ${threads} thread${threads === 1 ? '' : 's'}` : 'wasm-simd', model: model.name, seconds, elapsedMs, ttfaMs, rtf: seconds ? elapsedMs / 1000 / seconds : 0 },
+        stats: { backend: `wasm-simd · ${threads} thread${threads === 1 ? '' : 's'}`, model: model.name, seconds, elapsedMs, ttfaMs, rtf: seconds ? elapsedMs / 1000 / seconds : 0 },
       };
     },
 

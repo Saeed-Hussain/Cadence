@@ -1,0 +1,11 @@
+Cadence
+Copyright 2026 Saeed Hussain
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes a pronunciation lexicon derived from the CMU Pronouncing
+Dictionary, Copyright (C) 1993-2015 Carnegie Mellon University, used under
+its BSD 2-clause licence (see THIRD_PARTY_NOTICES.md).
+
+Model weights are not part of this product; they are downloaded at run time
+from their publishers under their own licences (see THIRD_PARTY_NOTICES.md).

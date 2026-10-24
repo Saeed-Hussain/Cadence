@@ -22,6 +22,7 @@ self.onmessage = (/** @type {MessageEvent} */ { data }) => {
       dtype: data.dtype,
       expectedMb: data.expectedMb,
       wasmPaths: data.wasmPaths,
+      threads: data.threads,
       onProgress: (progress, phase) => self.postMessage({ type: 'progress', progress, phase }),
     });
     loading.then(

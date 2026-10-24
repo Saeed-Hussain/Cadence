@@ -12,7 +12,8 @@ engine) is built and awaiting its numbers from the reference machine: the interf
 aside while speech generates, streams are planned and measured for gaps, the app works
 offline after one visit, and broken downloads resume. M2 (the SDK) is built: one package
 for the browser and Node, typed and documented ([packages/cadence/README.md](packages/cadence/README.md)).
-Not yet done: licensing. The full picture is in [docs/PROPOSAL.md](docs/PROPOSAL.md).
+M3 is done: Cadence is Apache-2.0, and its own phonemiser replaced eSpeak NG, so nothing it
+ships is copyleft. The full picture is in [docs/PROPOSAL.md](docs/PROPOSAL.md).
 
 ## MVP
 
@@ -24,7 +25,7 @@ Not yet done: licensing. The full picture is in [docs/PROPOSAL.md](docs/PROPOSAL
 | 4 | Simple JavaScript SDK | Built: browser and Node, types, docs, examples |
 | 5 | Streaming audio | Working |
 | 6 | Reproducible benchmarks | Working, published |
-| 7 | Licensing and documentation | Not done |
+| 7 | Licensing and documentation | Done: Apache-2.0, notices, [getting started](docs/GETTING_STARTED.md) |
 
 ## Run it
 
@@ -97,22 +98,35 @@ published, not hidden.
   labelled from measurements (`tools/voices/measure.js`), plus 28 higher-quality voices.
 - `apps/web` (`@cadence/web`) — the Next.js playground. It imports the engine; the engine
   never imports it.
+- `packages/cadence/src/g2p.js` — Cadence's own English front end: text clean-up, a
+  126,000-word lexicon from CMUdict, rules for unknown words, eSpeak-style IPA out.
+  `npm run g2p:compare` measures it against eSpeak NG (dev only).
 - `tools/bench` — the benchmarks. `tools/lab` — listening sets for judging quality by ear.
 
 ## Third-party components
 
 | Component | Used for | Licence |
 |---|---|---|
-| Piper (code) | Fast model architecture | MIT |
-| Piper LibriTTS-R medium voice | Fast model weights | Dataset CC BY 4.0 (LibriTTS-R, openslr.org/141) |
-| Kokoro-82M | Higher-quality model weights | Apache-2.0 |
+| CMU Pronouncing Dictionary | The pronunciation lexicon | BSD 2-clause |
 | ONNX Runtime Web / Node | Inference runtime | MIT |
-| `phonemizer` (eSpeak NG) | Text to phonemes | Package Apache-2.0; bundles eSpeak NG, which is **GPL-3.0** — under review before any paid tier |
+| Transformers.js | Running the HD model | Apache-2.0 |
+| Piper LibriTTS-R medium voice | Fast model weights, downloaded | Dataset CC BY 4.0 (LibriTTS-R, openslr.org/141) |
+| Kokoro-82M | HD model weights, downloaded | Apache-2.0 |
 
-Cadence's own licence is not chosen yet; until it is, no licence is granted.
+eSpeak NG (GPL-3.0) is no longer shipped: Cadence's own front end replaced it, and it is
+used only in development as the reference the replacement is measured against. Across
+1,278 words of real text the replacement matches eSpeak's phonemes with a 7.8% phoneme
+error rate (6.6% ignoring stress), mostly on technical jargon, and reads numbers, money and
+years better ([docs/g2p.json](docs/g2p.json)). Full list: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Licence
+
+Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Free to use in any project,
+commercial or not, keeping the notices.
 
 ## Documents
 
+- [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) — speech in a few minutes, browser or Node
 - [docs/PROPOSAL.md](docs/PROPOSAL.md) — vision, product, MVP, plan, risks, decisions
 - [docs/PROPOSAL.pdf](docs/PROPOSAL.pdf) — the same, printed
 - [docs/BENCHMARKS.md](docs/BENCHMARKS.md) — every measurement

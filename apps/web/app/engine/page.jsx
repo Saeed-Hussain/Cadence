@@ -23,15 +23,15 @@ const KERNELS = [
 ];
 
 // The plan in docs/PROPOSAL.md §8.
-const DONE = new Set(['M0']);
+const DONE = new Set(['M0', 'M2', 'M3']);
 const NOW = 'M1';
 
 const MILESTONES = [
   { id: 'M0', name: 'Measure and choose', when: '3 Oct', done: 'Every candidate measured on the reference machine; model chosen' },
-  { id: 'M1', name: 'Reliable engine', when: 'now', done: 'In-app within 15% of standalone; no gaps; offline; recovers from failed downloads' },
-  { id: 'M2', name: 'SDK', when: 'next', done: 'Packaged engine with a documented API, types and a Node path' },
-  { id: 'M3', name: 'Licensing and docs', when: '', done: 'LICENSE, notices, phonemiser licence resolved, getting-started guide' },
-  { id: 'M4', name: 'Benchmarks against alternatives', when: '', done: 'Speed, first audio, size, memory, quality on three hardware tiers' },
+  { id: 'M1', name: 'Reliable engine', when: 'built', done: 'In-app within 15% of standalone; no gaps; offline; recovers from failed downloads — reference numbers pending' },
+  { id: 'M2', name: 'SDK', when: '21 Oct', done: 'Packaged engine with a documented API, types and a Node path' },
+  { id: 'M3', name: 'Licensing and docs', when: '24 Oct', done: 'Apache-2.0; own phonemiser replaces eSpeak NG; notices; getting-started guide' },
+  { id: 'M4', name: 'Benchmarks against alternatives', when: 'next', done: 'Speed, first audio, size, memory, quality on three hardware tiers' },
 ];
 
 export default function Engine() {
