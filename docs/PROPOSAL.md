@@ -3,8 +3,8 @@
 ## The fastest high-quality local voice engine
 
 **Author:** Saeed Hussain — Full-Stack Software Engineer, AiroxLab
-**Date:** 19 September 2026, revised 9 October 2026
-**Status:** Building the MVP — model chosen by measurement (M0 done); making the engine reliable (M1) now
+**Date:** 19 September 2026, revised 24 October 2026
+**Status:** Building the MVP — M0 done; M1 built, awaiting reference-machine numbers; M2 (SDK) and M3 (licensing and documentation) done; M4 next
 **Roadmap entry:** `PROJECTS-ROADMAP.md` #16
 **Languages:** JavaScript (ES2023+) · WebAssembly · WebGPU where supported
 
@@ -119,8 +119,8 @@ The advantage has to be earned in four places, in this order:
 - Enterprise and embedded deployment licences.
 - Optional paid voice packs or customisation features.
 
-Pricing is validated with real developers before it is fixed. Every paid tier depends on
-the licensing question in §9 being resolved first.
+Pricing is validated with real developers before it is fixed. The licensing question that
+blocked paid tiers is resolved (§9): Cadence is Apache-2.0 and ships nothing copyleft.
 
 ---
 
@@ -131,13 +131,13 @@ the engine is reliable.
 
 | # | MVP item | Status |
 |---|---|---|
-| 1 | **One reliable speech model** | Chosen: Piper LibriTTS-R (§10). Not yet reliable *in the app* (§8) |
+| 1 | **One reliable speech model** | Chosen: Piper LibriTTS-R (§10). M1 built; reliable in the app on a second machine, reference numbers pending (§8) |
 | 2 | **A working local inference engine** | Working in a Web Worker, streaming, cached |
 | 3 | **A browser playground** | Built — wider than the MVP needs (see below) |
-| 4 | **A simple JavaScript SDK** | Not started as a product: no package, no docs, no types |
+| 4 | **A simple JavaScript SDK** | `@cadence/engine` for the browser and Node, typed, documented, with examples |
 | 5 | **Streaming audio output** | Working |
 | 6 | **Reproducible performance benchmarks** | `npm run bench`, `bench:browser`, `bench:app`, published |
-| 7 | **Basic licensing and documentation** | No LICENSE yet; third-party terms listed in the README; GPL question open |
+| 7 | **Basic licensing and documentation** | Apache-2.0; NOTICE and third-party notices; GPL resolved by replacing eSpeak NG; getting-started guide |
 
 **Deliberately after the MVP:** voice cloning and personal voices (with consent and
 safeguards), specialised kernels, WebGPU, desktop and mobile packaging, more languages,
@@ -158,9 +158,9 @@ published, not when the code exists.
 | Milestone | Done means | Status |
 |---|---|---|
 | **M0 — Measure and choose** | Real-time factor of every candidate measured on the reference machine; model chosen by the numbers | **Done** 3 Oct 2026 |
-| **M1 — Reliable engine** | In the real app, the fast model is within 15% of the standalone browser number; streams with no gaps; works offline after first load; recovers from a failed download | **In progress** — the app is measured at RTF 2.96 against 0.448 standalone; animations account for about 3× of that (§9) |
-| **M2 — SDK** | `@cadence/engine` packaged with a documented API and types; a working example in a few lines; a Node path on the native runtime | Not started |
-| **M3 — Licensing and documentation** | LICENSE; third-party notices; the phonemiser licence resolved; a getting-started guide | Not started |
+| **M1 — Reliable engine** | In the real app, the fast model is within 15% of the standalone browser number; streams with no gaps; works offline after first load; recovers from a failed download | **Built, awaiting reference numbers.** On a Ryzen 5 7430U (6 cores): in-app RTF 0.093, first audio 451 ms, 0 gaps in every run, offline check passing, within 15% of the standalone page. On the i5-4310U it was RTF 2.96 against 0.448 before the fix; `npm run bench:app` and `npm run check:offline` there close it |
+| **M2 — SDK** | `@cadence/engine` packaged with a documented API and types; a working example in a few lines; a Node path on the native runtime | **Done** 21 Oct 2026 |
+| **M3 — Licensing and documentation** | LICENSE; third-party notices; the phonemiser licence resolved; a getting-started guide | **Done** 24 Oct 2026 — Apache-2.0; eSpeak NG replaced by Cadence's own front end (7.8% phoneme error rate against it) |
 | **M4 — Benchmarks against alternatives** | Speed, first audio, size, memory and a defined quality measure, against plain Piper, Kokoro.js, the browser's built-in speech and at least one cloud API, on three hardware tiers | Not started |
 | **After the MVP** | Specialised convolution kernels for the measured hot path; WebGPU; consent-based voice customisation; desktop and mobile; Cadence's own weights | — |
 
@@ -172,7 +172,7 @@ published, not when the code exists.
 |---|---|---|
 | **Open-source alternatives are already good enough** | **High — the primary risk** | Prove a measured advantage (§4.1) or say so. M4 exists to compare honestly, losses included. |
 | **The interface costs more than the model** | High | Measured: on the reference machine the glass interface's animations made generation about 3× slower (RTF 2.96 → 1.02 with motion reduced). Even then the app is 2.3× slower than the standalone page. M1 finds and removes the rest; the interface must get out of the engine's way while it speaks. |
-| **The phonemiser's licence** | High for paid tiers | The `phonemizer` package is published under Apache-2.0 but bundles eSpeak NG, which is GPL-3.0. A paid commercial licence may be incompatible with shipping it. Needs a proper licence review; alternatives are a permissively licensed phonemiser or a dictionary-based front end. |
+| **The phonemiser's licence** | **Resolved** | eSpeak NG (GPL-3.0) was replaced by Cadence's own front end: CMUdict (BSD 2-clause), word-structure rules and letter-to-sound rules, producing the IPA both models were trained on. eSpeak stays only as a development reference. Remaining risk is quality on unusual words; `npm run g2p:compare` measures it. |
 | **One reference machine** | Medium | Every number so far is from one laptop. M4 adds at least two more tiers before any public performance claim. |
 | **The fast model does not run on WebGPU** | Medium | Measured: an unsupported integer operation. CPU WebAssembly is the path; WebGPU waits for kernels or a converted model. |
 | **First use needs a download** | Medium | The demo's "Wi-Fi off" assumes the weights are present. The SDK must offer bundling or pre-caching, and the docs must say so plainly. |
@@ -256,12 +256,18 @@ number, measured on the reference machine first:
 2. **One WebAssembly thread by default** on two-core machines, by measurement.
 3. **The runtime files are served by the app**, not a CDN, so it keeps working offline.
 4. **The MVP comes before kernels, cloning and new platforms** (9 October 2026).
+5. **Licence: Apache-2.0** (24 October 2026) — free adoption, a patent grant, and room for
+   paid hosting, support and voice packs on top.
+6. **Cadence's own phonemiser replaces eSpeak NG** (24 October 2026), so nothing shipped is
+   copyleft.
+7. **Weights are served by the app when it can** (21 October 2026): downloaded once to disk at
+   build time and served from `/models/`, with the internet as the fallback.
+8. **Threads follow the hardware** (21 October 2026): one below eight logical cores, half of
+   them above — 2× faster than one thread on a six-core machine.
+9. **The interface steps aside while speech generates** (21 October 2026): the ambient
+   animation pauses; the player redraws only when what it shows changes.
 
 ### Open
 
-1. **The phonemiser** — keep eSpeak NG under a GPL review, or replace it.
-2. **How weights reach the device** — download on first use, bundled in the SDK, or both.
-3. **The interface budget** — how much animation the playground can afford on the
-   reference machine while speech is generating.
-4. **Languages at launch** — English only is defensible for the MVP.
-5. **Which competitors and which hardware tiers** M4 measures against.
+1. **Languages at launch** — English only is defensible for the MVP.
+2. **Which competitors and which hardware tiers** M4 measures against.

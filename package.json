@@ -15,13 +15,17 @@
     "bench:browser": "node tools/bench/browser.js",
     "bench:app": "node tools/bench/app.js",
     "bench:report": "node tools/bench/report.js",
-    "check:offline": "node tools/bench/offline.js"
+    "check:offline": "node tools/bench/offline.js",
+    "g2p:build": "node tools/g2p/build-lexicon.js",
+    "g2p:compare": "node tools/g2p/compare.js"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
     "onnxruntime-node": "1.21.0",
-    "puppeteer-core": "^25.12.0"
-  }
+    "puppeteer-core": "^25.12.0",
+    "phonemizer": "^1.2.1"
+  },
+  "license": "Apache-2.0"
 }

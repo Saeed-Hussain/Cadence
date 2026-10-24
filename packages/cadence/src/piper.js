@@ -9,7 +9,7 @@
  * onnxruntime-node (native) and onnxruntime-web (browser).
  */
 
-import { phonemize } from 'phonemizer';
+import { loadLexicon, normalize, phonemizeSync } from './g2p.js';
 
 /** Punctuation Piper keeps as pauses, and espeak would otherwise drop. */
 const PUNCT = /([.,;:!?]+)/;
@@ -31,6 +31,8 @@ const PUNCT = /([.,;:!?]+)/;
  * @param {PiperConfig} config
  */
 export async function phonemeIds(text, config) {
+  await loadLexicon();
+  const dialect = /gb|uk|^en$/i.test(config.espeak?.voice ?? 'en-us') ? 'gb' : 'us';
   const map = config.phoneme_id_map;
   const pad = map._[0];
   /** @type {number[]} */
@@ -39,14 +41,14 @@ export async function phonemeIds(text, config) {
     const id = map[ch];
     if (id) ids.push(id[0], pad);
   };
-  for (const part of text.split(PUNCT)) {
+  for (const part of normalize(text).split(PUNCT)) {
     if (!part.trim()) continue;
     if (PUNCT.test(part)) {
       for (const ch of part) push(ch);
       push(' ');
       continue;
     }
-    const phonemes = (await phonemize(part, config.espeak.voice)).join(' ');
+    const phonemes = phonemizeSync(part, { dialect });
     for (const ch of phonemes) push(ch);
     push(' ');
   }
@@ -114,7 +116,7 @@ export function chunks(text, { first = 120, growth = 1.6, max = 260 } = {}) {
   /** @type {string[]} */
   const out = [];
   let cap = first;
-  for (const s of sentences(text)) {
+  for (const s of sentences(normalize(text))) {
     let rest = s;
     while (rest.length > cap) {
       const head = rest.slice(0, cap);

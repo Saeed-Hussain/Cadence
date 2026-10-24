@@ -14,9 +14,8 @@
     }
   },
   "dependencies": {
-    "kokoro-js": "^1.2.1",
-    "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4",
-    "phonemizer": "^1.2.1"
+    "@huggingface/transformers": "^3.8.1",
+    "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4"
   },
   "types": "./index.d.ts",
   "peerDependencies": {
@@ -26,5 +25,16 @@
     "onnxruntime-node": {
       "optional": true
     }
-  }
+  },
+  "license": "Apache-2.0",
+  "files": [
+    "src",
+    "index.d.ts",
+    "node.d.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "examples"
+  ]
 }
