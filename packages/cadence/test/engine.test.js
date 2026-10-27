@@ -14,11 +14,26 @@ test('every speaker in the fast model is in the library, once', () => {
   for (const i of indices) assert.ok(Number.isInteger(i) && i >= 0 && i < 904, `speaker ${i}`);
 });
 
-test('the HD voices are the 28 Kokoro originals', () => {
-  assert.equal(hd.length, 28);
-  for (const v of hd) {
+test('the HD voices are the 28 Kokoro originals plus blends of them', () => {
+  const originals = hd.filter((v) => v.kind === 'original');
+  assert.equal(originals.length, 28);
+  for (const v of originals) {
     assert.deepEqual(v.mix, [[v.id, 1]]);
     assert.ok(v.lang === 'a' || v.lang === 'b');
+  }
+  const blends = hd.filter((v) => v.kind === 'blend');
+  assert.ok(blends.length >= 20, `${blends.length} blends`);
+  const byId = new Map(originals.map((v) => [v.id, v]));
+  for (const v of blends) {
+    // Two real originals, weights summing to one, never mixing accent or gender.
+    assert.equal(v.mix.length, 2, v.id);
+    assert.ok(Math.abs(v.mix.reduce((t, [, w]) => t + w, 0) - 1) < 1e-9, v.id);
+    for (const [o] of v.mix) {
+      const src = byId.get(o);
+      assert.ok(src, `${v.id} mixes unknown ${o}`);
+      assert.equal(src.lang, v.lang, v.id);
+      assert.equal(src.gender, v.gender, v.id);
+    }
   }
 });
 

@@ -7,7 +7,8 @@
  *   readers, each an index into one 79 MB model. Every label comes from
  *   measuring the speaker (tools/voices/measure.js), not from guessing.
  *
- *   HD voices are Kokoro-82M's 28 English originals, with the quality grades
+ *   HD voices are Kokoro-82M's 28 English originals, plus 22 blends of the
+ *   best of them (BLENDS, below). The originals carry the quality grades
  *   published alongside the weights.
  *
  * Naming and cutting the Swift set down to the best few hundred is M4b's
@@ -26,7 +27,7 @@ import { SPEAKERS } from './data/libritts-speakers.js';
  * @property {'female' | 'male' | 'unclear'} gender
  * @property {string} accent
  * @property {string} language
- * @property {'original' | 'matched'} kind
+ * @property {'original' | 'blend' | 'matched'} kind
  * @property {string} grade          quality grade where one is published, else '—'
  * @property {number} pitch          measured mean pitch, Hz
  * @property {string} description
@@ -149,10 +150,72 @@ function hd() {
   });
 }
 
+/**
+ * More HD voices, each a blend of two originals of the same accent and
+ * gender: a voice is a style vector, and a weighted mix of two good ones is a
+ * new voice that belongs to nobody. Built from the best-graded originals, so
+ * the blends keep their naturalness.
+ *
+ * [id, name, [[original, weight], [original, weight]], words]
+ */
+const BLENDS = /** @type {const} */ ([
+  ['hd_aurora', 'Aurora', [['af_heart', 0.6], ['af_bella', 0.4]], 'warm, radiant'],
+  ['hd_june', 'June', [['af_heart', 0.5], ['af_sarah', 0.5]], 'friendly, warm'],
+  ['hd_willow', 'Willow', [['af_heart', 0.6], ['af_nicole', 0.4]], 'soft, warm'],
+  ['hd_maya', 'Maya', [['af_bella', 0.6], ['af_nova', 0.4]], 'bright, energetic'],
+  ['hd_clara', 'Clara', [['af_heart', 0.5], ['af_kore', 0.5]], 'clear, warm'],
+  ['hd_iris', 'Iris', [['af_bella', 0.5], ['af_aoede', 0.5]], 'smooth, lively'],
+  ['hd_ruby', 'Ruby', [['af_heart', 0.7], ['af_sky', 0.3]], 'airy, expressive'],
+  ['hd_hazel', 'Hazel', [['af_nicole', 0.6], ['af_aoede', 0.4]], 'gentle, calm'],
+  ['hd_stella', 'Stella', [['af_bella', 0.5], ['af_kore', 0.5]], 'confident, clear'],
+  ['hd_atlas', 'Atlas', [['am_michael', 0.6], ['am_fenrir', 0.4]], 'deep, warm'],
+  ['hd_rowan', 'Rowan', [['am_michael', 0.5], ['am_puck', 0.5]], 'friendly, bright'],
+  ['hd_jasper', 'Jasper', [['am_fenrir', 0.6], ['am_puck', 0.4]], 'strong, lively'],
+  ['hd_owen', 'Owen', [['am_michael', 0.7], ['am_echo', 0.3]], 'calm, grounded'],
+  ['hd_miles', 'Miles', [['am_michael', 0.6], ['am_liam', 0.4]], 'young, warm'],
+  ['hd_grant', 'Grant', [['am_fenrir', 0.5], ['am_onyx', 0.5]], 'deep, commanding'],
+  ['hd_eleanor', 'Eleanor', [['bf_emma', 0.6], ['bf_isabella', 0.4]], 'polished, refined'],
+  ['hd_charlotte', 'Charlotte', [['bf_emma', 0.7], ['bf_lily', 0.3]], 'warm, gentle'],
+  ['hd_harriet', 'Harriet', [['bf_isabella', 0.6], ['bf_alice', 0.4]], 'bright, crisp'],
+  ['hd_arthur', 'Arthur', [['bm_george', 0.6], ['bm_fable', 0.4]], 'rich, storyteller'],
+  ['hd_oliver', 'Oliver', [['bm_fable', 0.6], ['bm_daniel', 0.4]], 'warm, narrator'],
+  ['hd_edward', 'Edward', [['bm_george', 0.6], ['bm_lewis', 0.4]], 'measured, mature'],
+  ['hd_henry', 'Henry', [['bm_george', 0.5], ['bm_daniel', 0.5]], 'calm, rich'],
+]);
+
+/** @param {Voice[]} originals @returns {Voice[]} */
+function blends(originals) {
+  const byId = new Map(originals.map((v) => [v.id, v]));
+  return BLENDS.map(([id, name, mix, words]) => {
+    const parts = mix.map(([o]) => /** @type {Voice} */ (byId.get(o)));
+    const first = parts[0];
+    // Pitch as the mix would put it: the weighted mean of the two.
+    const pitch = Math.round(mix.reduce((s, [, w], i) => s + w * parts[i].pitch, 0));
+    return {
+      id,
+      name,
+      model: /** @type {const} */ ('hd'),
+      gender: first.gender,
+      accent: first.accent,
+      language: 'English',
+      kind: /** @type {const} */ ('blend'),
+      grade: 'Blend',
+      pitch,
+      description: `${cap(words)} ${first.accent} ${first.gender} voice, a blend of ${parts.map((p) => p.name).join(' and ')}. HD.`,
+      tags: words.split(', '),
+      hues: hues(id),
+      source: /** @type {const} */ ('library'),
+      lang: /** @type {'a' | 'b'} */ (first.lang),
+      mix: /** @type {[string, number][]} */ (mix.map(([o, w]) => [o, w])),
+    };
+  });
+}
+
 /** @param {string} s */
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export const VOICES = /** @type {Voice[]} */ ([...swift(), ...hd()]);
+const ORIGINALS = hd();
+export const VOICES = /** @type {Voice[]} */ ([...swift(), ...ORIGINALS, ...blends(ORIGINALS)]);
 
 export const FACETS = {
   model: ['swift', 'hd'],
