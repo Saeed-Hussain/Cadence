@@ -90,7 +90,9 @@ async function keptAudio(id) {
 const StoreContext = createContext(/** @type {ReturnType<typeof useStoreValue> | null} */ (null));
 
 function useStoreValue() {
-  const engine = useMemo(() => createEngine(), []);
+  // ?gpu=0 keeps Swift on the CPU alone, to compare against the GPU helper.
+  // Asked when Swift loads: during hydration the address has no query yet.
+  const engine = useMemo(() => createEngine({ gpu: () => !/[?&]gpu=0/.test(location.search) }), []);
   const [models, setModels] = useState(() => ({ swift: engine.state('swift'), hd: engine.state('hd') }));
   const [hydrated, setHydrated] = useState(false);
 

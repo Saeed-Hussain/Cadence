@@ -20,7 +20,7 @@ import { writeReport } from './report.js';
 
 const RUNS = Number(process.env.RUNS ?? 5);
 // Diagnostic runs change the page, so their numbers are printed, never saved.
-const DIAGNOSTIC = Boolean(process.env.REDUCED_MOTION || process.env.INJECT_CSS);
+const DIAGNOSTIC = Boolean(process.env.REDUCED_MOTION || process.env.INJECT_CSS || process.env.GPU || process.env.REPEAT);
 const PORT = 3170;
 const CHROME = process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const WEB = fileURLToPath(new URL('../../apps/web/', import.meta.url));
@@ -59,7 +59,9 @@ await page.setViewport({ width: 1440, height: 900 });
 if (process.env.REDUCED_MOTION) await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
 
 const loadStart = Date.now();
-await page.goto(`http://localhost:${PORT}/text-to-speech`, { waitUntil: 'networkidle2' });
+// GPU=0 compares against the CPU alone; REPEAT=3 speaks a passage three times as long.
+await page.goto(`http://localhost:${PORT}/text-to-speech${process.env.GPU === '0' ? '?gpu=0' : ''}`, { waitUntil: 'networkidle2' });
+const TEXT = Array(Number(process.env.REPEAT ?? 1)).fill(CORPUS.long).join(' ');
 let foot = '';
 for (;;) {
   foot = await page.$eval('.editor-foot', (e) => e.textContent ?? '');
@@ -75,6 +77,8 @@ if (/failed/.test(foot)) {
   process.exit(1);
 }
 console.log(`Swift ready after ${(readyMs / 1000).toFixed(1)} s`);
+// A person reads the page before they type: the GPU helper loads in that quiet.
+if (process.env.SETTLE) await new Promise((r) => setTimeout(r, Number(process.env.SETTLE)));
 // INJECT_CSS switches individual effects off, to find what each one costs.
 if (process.env.INJECT_CSS) await page.addStyleTag({ content: process.env.INJECT_CSS });
 
@@ -85,7 +89,7 @@ for (let r = 0; r < RUNS; r++) {
   await page.click('textarea');
   await page.keyboard.down('Control'); await page.keyboard.press('a'); await page.keyboard.up('Control');
   await page.keyboard.press('Backspace');
-  await page.type('textarea', CORPUS.long, { delay: 0 });
+  await page.type('textarea', TEXT, { delay: 0 });
   const before = await page.evaluate(() => JSON.parse(localStorage.getItem('cadence:history:v3') ?? '[]').length);
   const m0 = await page.metrics();
   const t0 = Date.now();
@@ -104,8 +108,8 @@ for (let r = 0; r < RUNS; r++) {
   const wall = (Date.now() - t0) / 1000;
   const busy = (k) => ((m1[k] - m0[k]) / wall) * 100;
   const mainThread = { task: busy('TaskDuration'), script: busy('ScriptDuration'), style: busy('RecalcStyleDuration'), layout: busy('LayoutDuration') };
-  runs.push({ rtf: entry.stats.rtf, ttfaMs: entry.stats.ttfaMs, audioS: entry.seconds, gaps: entry.stats.gaps ?? null, gapMs: entry.stats.gapMs ?? null, mainThread });
-  console.log(`  run ${r + 1}: RTF ${entry.stats.rtf.toFixed(3)} · first audio ${Math.round(entry.stats.ttfaMs)} ms · gaps ${entry.stats.gaps ?? '?'} (${entry.stats.gapMs ?? '?'} ms) · main thread busy ${mainThread.task.toFixed(0)}% (script ${mainThread.script.toFixed(0)}%, style ${mainThread.style.toFixed(0)}%, layout ${mainThread.layout.toFixed(0)}%)`);
+  runs.push({ backend: entry.stats.backend, rtf: entry.stats.rtf, ttfaMs: entry.stats.ttfaMs, audioS: entry.seconds, gaps: entry.stats.gaps ?? null, gapMs: entry.stats.gapMs ?? null, mainThread });
+  console.log(`  run ${r + 1} [${entry.stats.backend}]: RTF ${entry.stats.rtf.toFixed(3)} · first audio ${Math.round(entry.stats.ttfaMs)} ms · gaps ${entry.stats.gaps ?? '?'} (${entry.stats.gapMs ?? '?'} ms) · main thread busy ${mainThread.task.toFixed(0)}% (script ${mainThread.script.toFixed(0)}%, style ${mainThread.style.toFixed(0)}%, layout ${mainThread.layout.toFixed(0)}%)`);
 }
 const chrome = await browser.version();
 await browser.close();
