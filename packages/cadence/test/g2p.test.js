@@ -38,7 +38,7 @@ test('unknown words are derived or guessed, never dropped', async () => {
   assert.ok(guessWord('kokoro').at(-1) === 'OW0');
   // Spelled, as eSpeak spells it.
   assert.equal(await phonemize('CPU'), 'sˌiːpˌiːjˈuː');
-  assert.equal(await phonemize('src'), 'ˈɛsˈɑːɹsˈiː');
+  assert.equal(await phonemize('src'), 'ˌɛsˌɑːɹsˈiː');
 });
 
 test('flap and syllabic n follow the stress', () => {
@@ -54,4 +54,13 @@ test('British voices get non-rhotic forms', async () => {
 test('Kokoro input keeps punctuation as written', async () => {
   await phonemize('warm');
   assert.equal(kokoroPhonemes('Hello, world!', 'a'), 'həlˈoʊ, wˈɜːld!');
+});
+
+test('initialisms are spelled, even when they are also dictionary words', async () => {
+  assert.equal(await phonemize('Natural AI voices'), 'nˈætʃɚəl ˌeɪˈaɪ vˈɔɪsəz');
+  assert.equal(await phonemize('the US and the UK'), 'ðə jˌuːˈɛs ænd ðə jˌuːkˈeɪ');
+  assert.equal(await phonemize('APIs'), 'ˌeɪpˌiːˈaɪz');
+  // Words in capitals for emphasis, and longer acronyms said as words, stay words.
+  assert.equal(await phonemize('NO'), 'nˈoʊ');
+  assert.equal(await phonemize('NASA'), 'nˈæsə');
 });

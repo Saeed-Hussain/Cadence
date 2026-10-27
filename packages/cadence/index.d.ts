@@ -85,8 +85,12 @@ export interface EngineOptions {
   /** Where the app serves the ONNX Runtime WebAssembly files. Default '/ort/'. */
   wasmPaths?: string;
   /** Where the app serves the Swift weights, tried before the internet. Default '/models/'; null to skip. */
-  /** WebAssembly threads for both models. Default: 1 below eight logical cores, else half of them. */
+  /** WebAssembly threads for both models. Default: 1 below eight logical cores, else all of them (up to 16). */
   threads?: number;
+  /** Where the app serves the runtime HD pins. Default '/ort-hd/'. */
+  hdWasmPaths?: string;
+  /** false: never use the GPU helper. A function is asked when Swift first loads. Default: use it where the hardware allows. */
+  gpu?: boolean | (() => boolean);
   modelPaths?: string | null;
 }
 

@@ -338,7 +338,19 @@ const LETTERS = {
   u: 'Y UW1', v: 'V IY1', w: 'D AH1 B AH0 L Y UW0', x: 'EH1 K S', y: 'W AY1', z: 'Z IY1',
 };
 /** @param {string} word */
-const spell = (word) => [...word.toLowerCase()].flatMap((c) => (LETTERS[/** @type {keyof typeof LETTERS} */ (c)] ?? '').split(' ').filter(Boolean));
+/** Letter by letter, the last letter stressed the way eSpeak says it: "A-P-I". @param {string} word */
+function spell(word) {
+  const letters = [...word.toLowerCase()].map((c) => (LETTERS[/** @type {keyof typeof LETTERS} */ (c)] ?? '').split(' ').filter(Boolean));
+  return letters.flatMap((p, i) => (i < letters.length - 1 ? p.map((x) => x.replace(/1$/, '2')) : p));
+}
+
+/** Short words that are still words when written in capitals ("NO", "YES"). */
+const CAPS_WORDS = new Set(`
+  OK NO GO SO DO TO IN ON IT IS AT BE WE HE ME MY BY OF OR UP AN AS IF OH HI
+  THE AND YOU ARE NOT NOW NEW YES HEY WOW ALL BIG TOP FOR BUT CAN GET HOW WHY WHO
+  ONE TWO SIX TEN OUT OFF OUR HER HIS ITS WAS HAS HAD SHE MAN WAY DAY BAD GOOD
+  RUN BUY TRY SEE SAY FUN HOT END ANY FEW OLD LOW FAR YET ASK
+`.trim().split(/\s+/));
 
 /**
  * One written word to ARPAbet.
@@ -347,8 +359,13 @@ const spell = (word) => [...word.toLowerCase()].flatMap((c) => (LETTERS[/** @typ
  */
 export function wordPhones(raw) {
   const word = raw.toLowerCase().replace(/^'+|'+$/g, (q) => (raw.endsWith("s'") ? q : ''));
-  // Short all-capital words not in the dictionary, or with no vowel, are spelled: "API", "CPU", "TTS".
   if (/^[a-z]{2,5}$/i.test(raw) && !/[aeiouy]/i.test(raw) && !lookup(word)) return spell(raw);
+  // Two and three capitals are initialisms, spelled letter by letter, even when
+  // the dictionary has a word of that spelling: "AI" is A-I, not "eye"; "US"
+  // is U-S. Common words written in capitals for emphasis stay words.
+  const caps = /^([A-Z]{2,3})(s?)$/.exec(raw);
+  if (caps && !CAPS_WORDS.has(caps[1])) return caps[2] ? [...spell(caps[1]), 'Z'] : spell(caps[1]);
+  // Longer capitals are words when the dictionary knows them ("NASA"), spelled when not.
   if (/^[A-Z]{2,5}s?$/.test(raw) && (!lookup(word) || !/[AEIOUY]/.test(raw))) {
     const s = raw.endsWith('s') && raw.length > 2 ? spell(raw.slice(0, -1)) : spell(raw);
     return raw.endsWith('s') && raw.length > 2 ? [...s, 'Z'] : s;
@@ -446,7 +463,8 @@ export function phonemizeSync(text, { dialect = 'us' } = {}) {
   const words = text.split(/[^A-Za-z0-9'\-]+/).flatMap((w) => w.split('-')).filter((w) => /[A-Za-z]/.test(w));
   const ipa = words.map((w) => {
     const lower = w.toLowerCase();
-    const weak = words.length > 1 ? WEAK[/** @type {keyof typeof WEAK} */ (lower)] : undefined;
+    // Weak forms are for words, not initialisms: "US" is not "us".
+    const weak = words.length > 1 && !/^[A-Z]{2,}$/.test(w) ? WEAK[/** @type {keyof typeof WEAK} */ (lower)] : undefined;
     return weak ?? toIpa(wordPhones(w));
   }).join(' ');
   return dialect === 'gb' ? ipa.split(' ').map(toBritish).join(' ') : ipa;

@@ -15,6 +15,7 @@
 
 import { estimatePitch } from './dsp.js';
 import { isCached } from './download.js';
+import { chunks as planPieces } from './piper.js';
 import { PREVIEW_TEXT, VOICES, matchPitch } from './voices.js';
 import { SWIFT_FILES } from './weights.js';
 
@@ -26,7 +27,8 @@ export { chunks } from './piper.js';
 /** @typedef {import('./voices.js').Voice} Voice */
 /** @typedef {'swift' | 'hd'} ModelId */
 /** @typedef {'idle' | 'loading' | 'ready' | 'error'} Status */
-/** @typedef {{status: Status, progress: number, phase: 'download' | 'cache' | 'init', error: string}} ModelState */
+/** @typedef {'off' | 'loading' | 'active' | 'unavailable' | 'failed'} GpuState */
+/** @typedef {{status: Status, progress: number, phase: 'download' | 'cache' | 'init', error: string, gpu?: GpuState}} ModelState */
 
 /**
  * @typedef {object} Synthesis
@@ -68,15 +70,17 @@ export function cpuThreads() {
 /**
  * WebAssembly threads, for both models, by measurement of Swift:
  *   i5-4310U, 2 cores / 4 threads: 1 thread fastest (RTF 0.448; more were slower).
- *   Ryzen 5 7430U, 6 cores / 12 threads: 6 threads RTF 0.105, 12 threads 0.127, 1 thread 0.225.
- * So one thread below eight logical cores, otherwise half of them (the
- * physical cores, roughly), capped at eight. Threads need cross-origin
- * isolation; without it there is only one.
+ *   Ryzen 5 7430U, 6 cores / 12 threads, three alternating rounds
+ *   (tools/bench/pool): 12 threads RTF 0.105, 6 threads 0.118, 1 thread 0.27.
+ * So one thread below eight logical cores, otherwise all of them, capped at
+ * sixteen. Several model instances side by side were tried and rejected:
+ * 230 MB each, and no steady gain over one instance with every thread.
+ * Threads need cross-origin isolation; without it there is only one.
  */
 export function swiftThreads() {
   if (typeof globalThis.crossOriginIsolated !== 'undefined' && !globalThis.crossOriginIsolated) return 1;
   const logical = cpuThreads();
-  return logical >= 8 ? Math.min(8, Math.floor(logical / 2)) : 1;
+  return logical >= 8 ? Math.min(16, logical) : 1;
 }
 
 /** Whether this environment exposes WebGPU at all. */
@@ -85,14 +89,52 @@ export function hasWebGPU() {
 }
 
 /**
- * @param {{wasmPaths?: string, modelPaths?: string | null, threads?: number}} [options]
- *   wasmPaths: where the app serves the WebAssembly runtime files (see
- *   apps/web/scripts/copy-runtime.js). modelPaths: where it serves the Swift
- *   weights, tried before the internet (apps/web/scripts/fetch-model.js);
- *   null to always use the internet. threads: WebAssembly threads for both models;
- *   by default chosen from the hardware (`swiftThreads`).
+ * Whether Swift should get a GPU helper: a second worker on WebGPU that
+ * speaks pieces while the CPU worker speaks others. Measured on a Ryzen 5
+ * 7430U with Radeon graphics (tools/bench/pool, three alternating pairs):
+ * CPU alone RTF 0.092–0.110; CPU with 10 threads plus the GPU 0.075–0.077,
+ * first audio unchanged, 431 MB against 236. So: only with cores and memory to
+ * spare, and only where the browser offers a hardware GPU (checked again when
+ * the helper starts).
  */
-export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', threads = swiftThreads() } = {}) {
+export function swiftGpuPlanned() {
+  if (typeof navigator === 'undefined' || !hasWebGPU()) return false;
+  if (typeof globalThis.crossOriginIsolated !== 'undefined' && !globalThis.crossOriginIsolated) return false;
+  const memory = /** @type {any} */ (navigator).deviceMemory;
+  return cpuThreads() >= 8 && (memory === undefined || memory >= 8);
+}
+
+/**
+ * @param {{wasmPaths?: string, hdWasmPaths?: string, modelPaths?: string | null, threads?: number, gpu?: boolean | (() => boolean)}} [options]
+ *   wasmPaths: where the app serves Swift's WebAssembly runtime (see
+ *   apps/web/scripts/copy-runtime.js); hdWasmPaths: the version HD's
+ *   transformers.js pins. modelPaths: where it serves the Swift weights,
+ *   tried before the internet (apps/web/scripts/fetch-model.js); null to
+ *   always use the internet. threads: WebAssembly threads; by default chosen
+ *   from the hardware (`swiftThreads`). gpu: false to never use the GPU
+ *   helper; by default it is used where `swiftGpuPlanned` allows. A function
+ *   is asked when Swift first loads, not when the engine is made.
+ */
+export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', modelPaths = '/models/', threads = swiftThreads(), gpu = true } = {}) {
+  // Decided when Swift first loads. With a GPU helper planned, the CPU worker
+  // leaves two threads for it to drive the GPU with.
+  let gpuPlanned = false;
+  let cpuWorkerThreads = threads;
+  let planned = false;
+  const plan = () => {
+    if (planned) return;
+    planned = true;
+    gpuPlanned = (typeof gpu === 'function' ? gpu() : gpu) && swiftGpuPlanned();
+    cpuWorkerThreads = gpuPlanned ? Math.max(1, threads - 2) : threads;
+  };
+  /** @type {{worker: Worker | null}} */
+  const helper = { worker: null };
+  // Swift requests in flight, and when the last one ended: the GPU helper
+  // loads only into quiet, never beside speech it would slow down.
+  let speaking = 0;
+  let quietSince = 0;
+  /** @type {Map<string, {worker: Worker, resolve: (s: Float32Array) => void, reject: (message: string) => void}>} */
+  const pieceJobs = new Map();
   /**
    * @typedef {object} Runtime
    * @property {ModelState} state
@@ -146,6 +188,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
     load(id = 'swift') {
       const rt = runtimes[id];
       if (rt.loading) return rt.loading;
+      if (id === 'swift') plan();
       update(id, { status: 'loading', progress: 0, phase: 'download', error: '' });
       const w = spawn(id);
       rt.worker = w;
@@ -159,6 +202,9 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
         for (const [jobId, job] of pending) {
           if (job.worker === w) { pending.delete(jobId); job.reject(new Error(message)); }
         }
+        for (const [key, job] of pieceJobs) {
+          if (job.worker === w) { pieceJobs.delete(key); job.reject(message); }
+        }
         update(id, { status: 'error', error: message });
         failLoad?.(new Error(message));
       };
@@ -169,6 +215,14 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
       w.addEventListener('message', ({ data }) => {
         if (data.type === 'progress') {
           update(id, { progress: Math.max(rt.state.progress, data.progress), phase: data.phase });
+          return;
+        }
+        if (data.type === 'piece' || data.type === 'piece-failed') {
+          const key = `${data.id}:${data.index}`;
+          const pj = pieceJobs.get(key);
+          pieceJobs.delete(key);
+          if (data.type === 'piece') pj?.resolve(data.samples);
+          else pj?.reject(data.message);
           return;
         }
         const job = pending.get(data.id);
@@ -184,6 +238,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
             failLoad = null;
             update(id, { status: 'ready', progress: 1 });
             resolve();
+            if (id === 'swift') whenQuiet(startGpuHelper);
           } else if (data.type === 'error') {
             w.removeEventListener('message', onReady);
             failLoad = null;
@@ -198,9 +253,9 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
       });
       w.postMessage({
         type: 'load',
-        wasmPaths: new URL(wasmPaths, location.href).href,
+        wasmPaths: new URL(id === 'swift' ? wasmPaths : hdWasmPaths, location.href).href,
         modelPaths: modelPaths ? new URL(modelPaths, location.href).href : null,
-        threads,
+        threads: id === 'swift' ? cpuWorkerThreads : threads,
       });
       return rt.loading;
     },
@@ -231,6 +286,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
       const voice = resolveVoice(wanted);
       const model = MODELS.find((m) => m.id === voice.model) ?? MODELS[0];
       await engine.load(model.id);
+      if (model.id === 'swift') return speakSwift(text, voice, settings.speed ?? 1, onChunk, signal);
       const w = /** @type {Worker} */ (runtimes[model.id].worker);
       const id = nextId++;
       const start = performance.now();
@@ -335,6 +391,151 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
       };
     },
   };
+
+  /** Run `fn` once Swift has been idle for two seconds. */
+  function whenQuiet(/** @type {() => void} */ fn) {
+    if (!gpuPlanned) return;
+    quietSince = quietSince || performance.now();
+    const check = () => {
+      if (!speaking && performance.now() - quietSince >= 2000) fn();
+      else setTimeout(check, 500);
+    };
+    setTimeout(check, 500);
+  }
+
+  /**
+   * Swift's GPU helper: started once the CPU worker is ready, in the
+   * background, and only on a hardware GPU. Any failure, at load or later,
+   * retires it; the CPU worker carries on alone.
+   */
+  async function startGpuHelper() {
+    if (!gpuPlanned || helper.worker || (runtimes.swift.state.gpu && runtimes.swift.state.gpu !== 'off')) return;
+    update('swift', { gpu: 'loading' });
+    try {
+      const adapter = await /** @type {any} */ (navigator).gpu.requestAdapter({ powerPreference: 'high-performance' });
+      if (!adapter || adapter.isFallbackAdapter) throw new Error('no hardware GPU');
+    } catch {
+      update('swift', { gpu: 'unavailable' });
+      return;
+    }
+    const w = spawn('swift');
+    const retire = (/** @type {string} */ why) => {
+      if (helper.worker === w) helper.worker = null;
+      w.terminate();
+      for (const [key, job] of pieceJobs) if (job.worker === w) { pieceJobs.delete(key); job.reject(why); }
+      update('swift', { gpu: 'failed' });
+    };
+    w.addEventListener('error', (e) => { e.preventDefault?.(); retire(e.message || 'GPU worker error'); });
+    w.addEventListener('message', ({ data }) => {
+      if (data.type === 'ready') { helper.worker = w; update('swift', { gpu: 'active' }); return; }
+      if (data.type === 'error') { retire(data.message); return; }
+      if (data.type === 'piece' || data.type === 'piece-failed') {
+        const key = `${data.id}:${data.index}`;
+        const job = pieceJobs.get(key);
+        pieceJobs.delete(key);
+        if (data.type === 'piece') job?.resolve(data.samples);
+        else { job?.reject(data.message); retire(data.message); }
+      }
+    });
+    w.postMessage({
+      type: 'load',
+      ep: 'webgpu',
+      wasmPaths: new URL(wasmPaths, location.href).href,
+      modelPaths: modelPaths ? new URL(modelPaths, location.href).href : null,
+      threads: 1,
+    });
+  }
+
+  /**
+   * Swift, piece by piece over every worker it has. The first piece goes to
+   * the CPU worker alone, so first audio is as quick as it can be; after it,
+   * each free worker takes the next piece. Audio is handed on strictly in
+   * order. A piece the GPU helper drops goes back in the queue for the CPU.
+   *
+   * @param {string} text @param {Voice} voice @param {number} speed
+   * @param {((s: Float32Array) => void) | undefined} onChunk @param {AbortSignal | undefined} signal
+   * @returns {Promise<Synthesis | null>}
+   */
+  function speakSwift(text, voice, speed, onChunk, signal) {
+    const model = MODELS[0];
+    const cpu = /** @type {Worker} */ (runtimes.swift.worker);
+    const pieces = planPieces(text);
+    const id = nextId++;
+    const start = performance.now();
+    /** @type {(Float32Array | undefined)[]} */
+    const results = new Array(pieces.length);
+    /** @type {number[]} */
+    const retry = [];
+    const busy = new Set();
+    let next = 0;
+    let emitted = 0;
+    let ttfaMs = 0;
+    let usedGpu = false;
+    let over = false;
+
+    speaking++;
+    return new Promise((resolve, reject) => {
+      const finish = (/** @type {Synthesis | null} */ r, /** @type {Error} */ [e] = []) => {
+        if (over) return;
+        over = true;
+        speaking--;
+        quietSince = performance.now();
+        signal?.removeEventListener('abort', abort);
+        if (e) reject(e); else resolve(r);
+      };
+      const abort = () => finish(null);
+      if (signal?.aborted) return finish(null);
+      signal?.addEventListener('abort', abort, { once: true });
+      if (!pieces.length) return finish({ samples: new Float32Array(0), sampleRate: model.sampleRate, stats: { backend: 'wasm-simd', model: model.name, seconds: 0, elapsedMs: 0, ttfaMs: 0, rtf: 0 } });
+
+      const flush = () => {
+        while (emitted < pieces.length && results[emitted]) {
+          const s = /** @type {Float32Array} */ (results[emitted++]);
+          if (!ttfaMs) ttfaMs = performance.now() - start;
+          onChunk?.(s);
+        }
+        if (emitted === pieces.length) {
+          const samples = concat(/** @type {Float32Array[]} */ (results));
+          const elapsedMs = performance.now() - start;
+          const seconds = samples.length / model.sampleRate;
+          const backend = `wasm-simd · ${cpuWorkerThreads} thread${cpuWorkerThreads === 1 ? '' : 's'}${usedGpu ? ' + WebGPU' : ''}`;
+          finish({ samples, sampleRate: model.sampleRate, stats: { backend, model: model.name, seconds, elapsedMs, ttfaMs, rtf: seconds ? elapsedMs / 1000 / seconds : 0 } });
+        }
+      };
+
+      const send = (/** @type {Worker} */ w, /** @type {number} */ index) => {
+        busy.add(w);
+        if (w !== cpu) usedGpu = true;
+        pieceJobs.set(`${id}:${index}`, {
+          worker: w,
+          resolve: (s) => { busy.delete(w); if (over) return; results[index] = s; flush(); dispatch(); },
+          reject: (message) => {
+            busy.delete(w);
+            if (over) return;
+            if (w === cpu) finish(null, [new Error(message)]);
+            else { retry.unshift(index); dispatch(); }
+          },
+        });
+        w.postMessage({ type: 'piece', id, index, text: pieces[index], speaker: voice.speaker, speed });
+      };
+
+      function dispatch() {
+        if (over) return;
+        for (const w of [cpu, helper.worker]) {
+          if (!w || busy.has(w)) continue;
+          // Nothing runs beside the first piece: it is the one being waited for.
+          if (!results[0] && (next > 0 || w !== cpu) && !retry.includes(0)) return;
+          // The GPU is slower per piece than the CPU: it takes work only while
+          // plenty remains, so the CPU always finishes the tail.
+          if (w !== cpu && pieces.length - next < 3 && !retry.length) continue;
+          const index = retry.length ? /** @type {number} */ (retry.shift()) : next < pieces.length ? next++ : -1;
+          if (index < 0) return;
+          send(w, index);
+        }
+      }
+      dispatch();
+    });
+  }
 
   return engine;
 }

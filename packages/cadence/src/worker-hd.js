@@ -17,14 +17,16 @@ class Cancelled extends Error {}
 
 self.onmessage = (/** @type {MessageEvent} */ { data }) => {
   if (data.type === 'load') {
-    loading ??= loadKokoro({
-      device: data.device,
+    const load = (/** @type {string} */ device) => loadKokoro({
+      device: /** @type {any} */ (device),
       dtype: data.dtype,
       expectedMb: data.expectedMb,
       wasmPaths: data.wasmPaths,
       threads: data.threads,
       onProgress: (progress, phase) => self.postMessage({ type: 'progress', progress, phase }),
     });
+    // The GPU when the engine offers one; the CPU if the GPU will not load.
+    loading ??= data.device === 'webgpu' ? load('webgpu').catch(() => load('wasm')) : load('wasm');
     loading.then(
       () => self.postMessage({ type: 'ready' }),
       (e) => self.postMessage({ type: 'error', message: String(e?.message ?? e) }),

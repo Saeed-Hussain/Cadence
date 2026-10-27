@@ -29,7 +29,7 @@ test('chunks keep short sentences whole and lose no words', () => {
   const long = 'The lighthouse keeper had not seen a ship in eleven years, and the village below had long since stopped asking her about it, because the answer never changed and the question only made her sad. '.repeat(3);
   const got = chunks(long);
   assert.equal(got.join(' ').replace(/\s+/g, ' '), long.trim().replace(/\s+/g, ' '));
-  assert.ok(got[0].length <= 120, `first piece ${got[0].length}`);
+  assert.ok(got[0].length <= 60, `first piece ${got[0].length}`);
   for (const c of got) assert.ok(c.length <= 260, `piece ${c.length}`);
 });
 

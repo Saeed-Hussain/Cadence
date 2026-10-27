@@ -17,7 +17,11 @@
     "bench:report": "node tools/bench/report.js",
     "check:offline": "node tools/bench/offline.js",
     "g2p:build": "node tools/g2p/build-lexicon.js",
-    "g2p:compare": "node tools/g2p/compare.js"
+    "g2p:compare": "node tools/g2p/compare.js",
+    "video:prepare": "node tools/video/prepare.js",
+    "video": "node tools/video/export.js",
+    "app": "npm run build:web && npm run start --workspace @cadence/web",
+    "voiceover": "node tools/voiceover.js"
   },
   "engines": {
     "node": ">=22"
