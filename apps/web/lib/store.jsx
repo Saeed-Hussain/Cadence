@@ -93,6 +93,9 @@ function useStoreValue() {
   // ?gpu=0 keeps Swift on the CPU alone, to compare against the GPU helper.
   // Asked when Swift loads: during hydration the address has no query yet.
   const engine = useMemo(() => createEngine({ gpu: () => !/[?&]gpu=0/.test(location.search) }), []);
+  // The engine on window.cadence, for trying things from the browser console:
+  // await cadence.synthesize({ text: 'Hello', voice: 'hd_aurora' })
+  useEffect(() => { /** @type {any} */ (window).cadence = engine; }, [engine]);
   const [models, setModels] = useState(() => ({ swift: engine.state('swift'), hd: engine.state('hd') }));
   const [hydrated, setHydrated] = useState(false);
 

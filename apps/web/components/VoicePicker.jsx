@@ -65,7 +65,7 @@ function PickerPanel({ anchor, value, onPick, onClose }) {
   const panel = useRef(/** @type {HTMLDivElement | null} */ (null));
   const input = useRef(/** @type {HTMLInputElement | null} */ (null));
   const [q, setQ] = useState('');
-  const [scope, setScope] = useState(/** @type {'all' | 'mine'} */ ('mine'));
+  const [scope, setScope] = useState(/** @type {'all' | 'mine' | 'hd'} */ ('mine'));
   const [pos, setPos] = useState({ top: 0, left: 0, up: false });
   const [hot, setHot] = useState(0);
 
@@ -102,7 +102,12 @@ function PickerPanel({ anchor, value, onPick, onClose }) {
 
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const pool = scope === 'mine' && !needle ? voices.filter((v) => favorites.includes(v.id)) : voices;
+    // HD first everywhere: there are 50 of them against 904 Swift voices, and
+    // listed after Swift they fell past the end of the list.
+    const ordered = [...voices.filter((v) => v.model === 'hd'), ...voices.filter((v) => v.model !== 'hd')];
+    const pool = scope === 'hd' ? ordered.filter((v) => v.model === 'hd')
+      : scope === 'mine' && !needle ? voices.filter((v) => favorites.includes(v.id))
+      : ordered;
     return needle
       ? pool.filter((v) => `${v.name} ${v.accent} ${v.gender} ${v.model === 'hd' ? 'hd' : 'swift'} ${v.tags.join(' ')}`.toLowerCase().includes(needle))
       : pool;
@@ -151,7 +156,7 @@ function PickerPanel({ anchor, value, onPick, onClose }) {
             label="Voice set"
             value={scope}
             onChange={setScope}
-            options={[{ value: 'mine', label: 'My voices' }, { value: 'all', label: 'All voices' }]}
+            options={[{ value: 'mine', label: 'My voices' }, { value: 'hd', label: 'HD voices' }, { value: 'all', label: 'All voices' }]}
           />
         )}
       </div>

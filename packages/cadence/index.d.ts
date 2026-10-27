@@ -15,7 +15,7 @@ export interface Voice {
   gender: 'female' | 'male' | 'unclear';
   accent: string;
   language: string;
-  kind: 'original' | 'matched';
+  kind: 'original' | 'blend' | 'matched';
   /** Quality grade where one is published, else '—'. */
   grade: string;
   /** Measured mean pitch, Hz. */

@@ -31,8 +31,8 @@ const file = args.find((a) => !a.startsWith('--'));
 const opt = (name, fallback) => (args.find((a) => a.startsWith(`--${name}=`)) ?? `--${name}=${fallback}`).split('=')[1];
 if (!file) {
   console.log('Usage: npm run voiceover -- script.txt [--voice=af_heart] [--speed=1] [--pause=0.5]\n\nGood voices to start with:');
-  for (const v of VOICES.filter((x) => x.model === 'hd').slice(0, 8)) console.log(`  ${v.id.padEnd(12)} ${v.description}`);
-  console.log(`  ${VOICES[0].id.padEnd(12)} ${VOICES[0].description} (fast)`);
+  for (const v of VOICES.filter((x) => x.model === 'hd')) console.log(`  ${v.id.padEnd(14)} ${v.description}`);
+  console.log(`  ${VOICES[0].id.padEnd(14)} ${VOICES[0].description} (Swift: fast)`);
   process.exit(1);
 }
 const voiceId = opt('voice', 'af_heart');
