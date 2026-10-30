@@ -8,7 +8,7 @@
  *    app's own history cache and written as WAV.
  * 2. The screenshots: the playground in its dark theme, at 2× for zooming.
  *
- * Writes video/assets/ (narration WAVs, PNGs, manifest.json).
+ * Writes .cache/video/assets/ (narration WAVs, PNGs, manifest.json).
  */
 
 import { spawn } from 'node:child_process';
@@ -24,7 +24,7 @@ const { DEMO_TEXT, NARRATOR, SCENES } = await import(REEL ? './script-reel.js' :
 
 const PORT = 3179;
 const ROOT = new URL('../../', import.meta.url);
-const OUT = new URL(REEL ? 'video/assets-reel/' : 'video/assets/', ROOT);
+const OUT = new URL(REEL ? '.cache/video/assets-reel/' : '.cache/video/assets/', ROOT);
 const CHROME = process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const SWIFT_VOICE = 's-3922';
 const only = process.argv.slice(2);

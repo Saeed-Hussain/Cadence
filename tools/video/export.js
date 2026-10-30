@@ -30,7 +30,7 @@ const FRAMES = join(WORK, 'frames');
 // FORMAT=reel renders the vertical cut for TikTok, Instagram Reels and Shorts.
 const REEL = process.env.FORMAT === 'reel';
 const [W, H] = REEL ? [1080, 1920] : [1920, 1080];
-const OUT = process.argv[2] ?? join(ROOT, 'video', REEL ? 'Cadence - Reel (1080x1920).mp4' : 'Cadence - Still paying for ElevenLabs.mp4');
+const OUT = process.argv[2] ?? join(ROOT, 'output', 'films', REEL ? 'Cadence - Reel (1080x1920).mp4' : 'Cadence - Still paying for ElevenLabs.mp4');
 const CHROME = process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const PARAMS = [REEL ? 'reel' : '', process.env.SCENES ? `scenes=${process.env.SCENES}` : ''].filter(Boolean);
 const QUERY = PARAMS.length ? `?${PARAMS.join('&')}` : '';

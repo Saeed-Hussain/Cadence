@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer-core';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const OUT = process.argv[2] ?? join(ROOT, 'video', 'Cadence - Still paying for ElevenLabs.mp4');
+const OUT = process.argv[2] ?? join(ROOT, 'output', 'films', 'Cadence - Still paying for ElevenLabs.mp4');
 const CHROME = process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.wav': 'audio/wav', '.mp4': 'video/mp4' };
 
@@ -33,7 +33,7 @@ export function serve() {
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { server, port } = serve();
-  await mkdir(join(ROOT, 'video'), { recursive: true });
+  await mkdir(join(ROOT, 'output', 'films'), { recursive: true });
   const out = createWriteStream(OUT);
   let bytes = 0;
 

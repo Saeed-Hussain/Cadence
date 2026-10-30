@@ -101,7 +101,18 @@ published, not hidden.
 - `packages/cadence/src/g2p.js` — Cadence's own English front end: text clean-up, a
   126,000-word lexicon from CMUdict, rules for unknown words, eSpeak-style IPA out.
   `npm run g2p:compare` measures it against eSpeak NG (dev only).
-- `tools/bench` — the benchmarks. `tools/lab` — listening sets for judging quality by ear.
+- `tools/` — everything that is not the product:
+  - `bench/` — the benchmarks (`npm run bench*`).
+  - `voices/` — measuring and auditioning the voice library (`npm run voices:audition`).
+  - `g2p/` — building the lexicon and checking the phonemiser against eSpeak.
+  - `video/` — the promo films; `voiceover.js` — a voiceover from a text file.
+  - `lab/` — listening sets for judging quality by ear.
+- `docs/` — the proposal, getting started, and benchmark results.
+- `output/` (git-ignored) — what the tools make, kept on this machine:
+  `films/` (the promo videos), `voiceovers/<name>/`, and `voices/` (the voice audition:
+  one WAV per voice, `scores.json`, and `index.html` to listen and pick).
+- `.cache/` (git-ignored) — downloaded weights, the test browser profile, and
+  intermediate files (video frames and assets). Safe to delete; it is rebuilt.
 
 ## Third-party components
 

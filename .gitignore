@@ -16,6 +16,5 @@ apps/web/public/sw-manifest.json
 # The fast model, copied from .cache/models/ before dev and build.
 apps/web/public/models/
 
-# The promo film and its rendered assets (tools/video makes them).
-/video/
-/voiceover/
+# What the tools make: films, voiceovers, the voice audition (see README, Layout).
+/output/

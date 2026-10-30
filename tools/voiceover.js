@@ -9,7 +9,7 @@
  * playground, in a headless browser, with the voice you choose — HD voices
  * included, which run on the browser's runtime. You get one WAV per paragraph
  * and the whole voiceover joined with a pause between paragraphs, in
- * voiceover/<script name>/.
+ * output/voiceovers/<script name>/.
  *
  * Needs a production build first: npm run build:web.
  */
@@ -42,7 +42,7 @@ const speed = Number(opt('speed', '1'));
 const pause = Number(opt('pause', '0.5'));
 
 const paragraphs = (await readFile(resolve(file), 'utf8')).split(/\r?\n\s*\r?\n/).map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean);
-const out = join(ROOT, 'voiceover', basename(file, extname(file)));
+const out = join(ROOT, 'output', 'voiceovers', basename(file, extname(file)));
 await mkdir(out, { recursive: true });
 console.log(`${paragraphs.length} paragraph${paragraphs.length === 1 ? '' : 's'} · voice ${voice.name} (${voice.model === 'hd' ? 'Cadence HD' : 'Cadence Swift'}) · speed ${speed}`);
 

@@ -14,9 +14,9 @@ import puppeteer from 'puppeteer-core';
 import { serve } from './record.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const FILE = process.argv[2] ?? join(ROOT, 'video', 'Cadence - Still paying for ElevenLabs.mp4');
+const FILE = process.argv[2] ?? join(ROOT, 'output', 'films', 'Cadence - Still paying for ElevenLabs.mp4');
 const TIMES = (process.argv[3] ?? '2,10,30').split(',').map(Number);
-const OUT = join(ROOT, 'video', 'check');
+const OUT = join(ROOT, '.cache', 'video', 'check');
 const CHROME = process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 const fd = openSync(FILE, 'r');
