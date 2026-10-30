@@ -22,7 +22,7 @@ const XFADE = 0.55;
 const EXPORT = new URLSearchParams(location.search).has('export');
 // ?reel: the vertical cut, 1080 × 1920, for TikTok, Reels and Shorts.
 const REEL = new URLSearchParams(location.search).has('reel');
-const ASSETS = REEL ? '/video/assets-reel/' : '/video/assets/';
+const ASSETS = REEL ? '/.cache/video/assets-reel/' : '/.cache/video/assets/';
 if (REEL) document.documentElement.classList.add('reel');
 // The words the click and the closing beat land on.
 const CLICK_PHRASE = REEL ? 'tap generate' : 'press generate';

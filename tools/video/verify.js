@@ -15,8 +15,8 @@ import puppeteer from 'puppeteer-core';
 import { serve } from './record.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const FILE = process.argv[2] ?? join(ROOT, 'video', 'Cadence - Still paying for ElevenLabs.mp4');
-const CHECK = join(ROOT, 'video', 'check');
+const FILE = process.argv[2] ?? join(ROOT, 'output', 'films', 'Cadence - Still paying for ElevenLabs.mp4');
+const CHECK = join(ROOT, '.cache', 'video', 'check');
 const CHROME = process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 await mkdir(CHECK, { recursive: true });
