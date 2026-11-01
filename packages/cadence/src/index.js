@@ -73,14 +73,38 @@ export function cpuThreads() {
  *   Ryzen 5 7430U, 6 cores / 12 threads, three alternating rounds
  *   (tools/bench/pool): 12 threads RTF 0.105, 6 threads 0.118, 1 thread 0.27.
  * So one thread below eight logical cores, otherwise all of them, capped at
- * sixteen. Several model instances side by side were tried and rejected:
- * 230 MB each, and no steady gain over one instance with every thread.
+ * sixteen. This is HD's count, and Swift's when it has no pool (`swiftPool`).
  * Threads need cross-origin isolation; without it there is only one.
  */
 export function swiftThreads() {
   if (typeof globalThis.crossOriginIsolated !== 'undefined' && !globalThis.crossOriginIsolated) return 1;
   const logical = cpuThreads();
   return logical >= 8 ? Math.min(16, logical) : 1;
+}
+
+/**
+ * Swift's CPU pool: one main worker that speaks the first piece alone, so
+ * first audio stays quick, and helper workers that each speak a different
+ * piece after it. The runtime's threads scale poorly inside one inference, so
+ * several small workers do more than one big one. Measured on a Ryzen 5
+ * 7430U, 6 cores / 12 threads, a 100-sentence paragraph (1,575 words, 7.3
+ * minutes of audio), three runs each:
+ *   one worker, 12 threads            41–44 s
+ *   6 threads + five helpers of 2     34–37 s
+ *   4 threads + four helpers of 2     29–32 s, first audio ~320 ms
+ *   six workers of 2                  30–38 s, first audio ~470 ms
+ * So: four main threads and helpers of two over the rest of the cores, at
+ * most four helpers (about 230 MB each), fewer on a small-memory device. None
+ * below eight logical cores, where it has not been measured.
+ *
+ * @returns {{threads: number, helpers: number, helperThreads: number}}
+ */
+export function swiftPool() {
+  const threads = swiftThreads();
+  if (threads < 8) return { threads, helpers: 0, helperThreads: 0 };
+  const memory = typeof navigator !== 'undefined' ? /** @type {any} */ (navigator).deviceMemory : undefined;
+  const byMemory = memory === undefined || memory >= 8 ? 4 : memory >= 4 ? 1 : 0;
+  return { threads: 4, helpers: Math.min(byMemory, Math.floor((threads - 4) / 2)), helperThreads: 2 };
 }
 
 /** Whether this environment exposes WebGPU at all. */
@@ -105,32 +129,44 @@ export function swiftGpuPlanned() {
 }
 
 /**
- * @param {{wasmPaths?: string, hdWasmPaths?: string, modelPaths?: string | null, threads?: number, gpu?: boolean | (() => boolean)}} [options]
+ * @param {{wasmPaths?: string, hdWasmPaths?: string, modelPaths?: string | null, threads?: number, pool?: boolean | (() => boolean), gpu?: boolean | (() => boolean)}} [options]
  *   wasmPaths: where the app serves Swift's WebAssembly runtime (see
  *   apps/web/scripts/copy-runtime.js); hdWasmPaths: the version HD's
  *   transformers.js pins. modelPaths: where it serves the Swift weights,
  *   tried before the internet (apps/web/scripts/fetch-model.js); null to
- *   always use the internet. threads: WebAssembly threads; by default chosen
- *   from the hardware (`swiftThreads`). gpu: false to never use the GPU
- *   helper; by default it is used where `swiftGpuPlanned` allows. A function
- *   is asked when Swift first loads, not when the engine is made.
+ *   always use the internet. threads: WebAssembly threads of the main
+ *   worker; by default chosen from the hardware (`swiftPool`,
+ *   `swiftThreads`). pool: false to speak Swift on one worker only; by
+ *   default helpers are used where `swiftPool` allows. gpu: false to never
+ *   use the GPU helper; by default it is used where `swiftGpuPlanned`
+ *   allows. A function is asked when Swift first loads, not when the engine
+ *   is made.
  */
-export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', modelPaths = '/models/', threads = swiftThreads(), gpu = true } = {}) {
+export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', modelPaths = '/models/', threads, pool = true, gpu = true } = {}) {
   // Decided when Swift first loads. With a GPU helper planned, the CPU worker
   // leaves two threads for it to drive the GPU with.
   let gpuPlanned = false;
-  let cpuWorkerThreads = threads;
+  let cpuWorkerThreads = threads ?? swiftThreads();
+  let helpersPlanned = 0;
+  let helperThreads = 0;
   let planned = false;
   const plan = () => {
     if (planned) return;
     planned = true;
+    const p = (typeof pool === 'function' ? pool() : pool) ? swiftPool() : null;
+    helpersPlanned = p?.helpers ?? 0;
+    helperThreads = p?.helperThreads ?? 0;
     gpuPlanned = (typeof gpu === 'function' ? gpu() : gpu) && swiftGpuPlanned();
-    cpuWorkerThreads = gpuPlanned ? Math.max(1, threads - 2) : threads;
+    const main = threads ?? (helpersPlanned ? /** @type {NonNullable<typeof p>} */ (p).threads : swiftThreads());
+    cpuWorkerThreads = gpuPlanned && !helpersPlanned ? Math.max(1, main - 2) : main;
   };
   /** @type {{worker: Worker | null}} */
   const helper = { worker: null };
-  // Swift requests in flight, and when the last one ended: the GPU helper
-  // loads only into quiet, never beside speech it would slow down.
+  /** Swift's CPU helpers that have loaded (see `swiftPool`). @type {Worker[]} */
+  const cpuHelpers = [];
+  let helpersStarted = false;
+  // Swift requests in flight, and when the last one ended: the helpers load
+  // only into quiet, never beside speech they would slow down.
   let speaking = 0;
   let quietSince = 0;
   /** @type {Map<string, {worker: Worker, resolve: (s: Float32Array) => void, reject: (message: string) => void}>} */
@@ -238,7 +274,7 @@ export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', mo
             failLoad = null;
             update(id, { status: 'ready', progress: 1 });
             resolve();
-            if (id === 'swift') whenQuiet(startGpuHelper);
+            if (id === 'swift') whenQuiet(() => { startCpuHelpers(); startGpuHelper(); });
           } else if (data.type === 'error') {
             w.removeEventListener('message', onReady);
             failLoad = null;
@@ -255,7 +291,7 @@ export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', mo
         type: 'load',
         wasmPaths: new URL(id === 'swift' ? wasmPaths : hdWasmPaths, location.href).href,
         modelPaths: modelPaths ? new URL(modelPaths, location.href).href : null,
-        threads: id === 'swift' ? cpuWorkerThreads : threads,
+        threads: id === 'swift' ? cpuWorkerThreads : threads ?? swiftThreads(),
       });
       return rt.loading;
     },
@@ -324,7 +360,7 @@ export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', mo
       return {
         samples,
         sampleRate: model.sampleRate,
-        stats: { backend: `wasm-simd · ${threads} thread${threads === 1 ? '' : 's'}`, model: model.name, seconds, elapsedMs, ttfaMs, rtf: seconds ? elapsedMs / 1000 / seconds : 0 },
+        stats: { backend: `wasm-simd · ${threads ?? swiftThreads()} thread${(threads ?? swiftThreads()) === 1 ? '' : 's'}`, model: model.name, seconds, elapsedMs, ttfaMs, rtf: seconds ? elapsedMs / 1000 / seconds : 0 },
       };
     },
 
@@ -394,13 +430,52 @@ export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', mo
 
   /** Run `fn` once Swift has been idle for two seconds. */
   function whenQuiet(/** @type {() => void} */ fn) {
-    if (!gpuPlanned) return;
+    if (!gpuPlanned && !helpersPlanned) return;
     quietSince = quietSince || performance.now();
     const check = () => {
       if (!speaking && performance.now() - quietSince >= 2000) fn();
       else setTimeout(check, 500);
     };
     setTimeout(check, 500);
+  }
+
+  /**
+   * Swift's CPU helpers: loaded in the background once the main worker is
+   * ready, with progress kept quiet. One that fails, at load or later, is
+   * retired and its piece goes back to the queue; the rest carry on.
+   */
+  function startCpuHelpers() {
+    if (helpersStarted || !helpersPlanned) return;
+    helpersStarted = true;
+    for (let i = 0; i < helpersPlanned; i++) {
+      const w = spawn('swift');
+      const retire = (/** @type {string} */ why) => {
+        const at = cpuHelpers.indexOf(w);
+        if (at >= 0) cpuHelpers.splice(at, 1);
+        w.terminate();
+        for (const [key, job] of pieceJobs) if (job.worker === w) { pieceJobs.delete(key); job.reject(why); }
+      };
+      w.addEventListener('error', (e) => { e.preventDefault?.(); retire(e.message || 'helper worker error'); });
+      w.addEventListener('message', ({ data }) => {
+        if (data.type === 'ready') { cpuHelpers.push(w); return; }
+        if (data.type === 'error') { retire(data.message); return; }
+        if (data.type === 'piece' || data.type === 'piece-failed') {
+          const key = `${data.id}:${data.index}`;
+          const job = pieceJobs.get(key);
+          pieceJobs.delete(key);
+          if (data.type === 'piece') job?.resolve(data.samples);
+          else { job?.reject(data.message); retire(data.message); }
+        }
+      });
+      w.postMessage({
+        type: 'load',
+        ep: 'wasm',
+        quiet: true,
+        wasmPaths: new URL(wasmPaths, location.href).href,
+        modelPaths: modelPaths ? new URL(modelPaths, location.href).href : null,
+        threads: helperThreads,
+      });
+    }
   }
 
   /**
@@ -448,9 +523,9 @@ export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', mo
 
   /**
    * Swift, piece by piece over every worker it has. The first piece goes to
-   * the CPU worker alone, so first audio is as quick as it can be; after it,
+   * the main worker alone, so first audio is as quick as it can be; after it,
    * each free worker takes the next piece. Audio is handed on strictly in
-   * order. A piece the GPU helper drops goes back in the queue for the CPU.
+   * order. A piece a helper drops goes back in the queue.
    *
    * @param {string} text @param {Voice} voice @param {number} speed
    * @param {((s: Float32Array) => void) | undefined} onChunk @param {AbortSignal | undefined} signal
@@ -471,6 +546,7 @@ export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', mo
     let emitted = 0;
     let ttfaMs = 0;
     let usedGpu = false;
+    const usedHelpers = new Set();
     let over = false;
 
     speaking++;
@@ -498,14 +574,15 @@ export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', mo
           const samples = concat(/** @type {Float32Array[]} */ (results));
           const elapsedMs = performance.now() - start;
           const seconds = samples.length / model.sampleRate;
-          const backend = `wasm-simd · ${cpuWorkerThreads} thread${cpuWorkerThreads === 1 ? '' : 's'}${usedGpu ? ' + WebGPU' : ''}`;
+          const backend = `wasm-simd · ${cpuWorkerThreads} thread${cpuWorkerThreads === 1 ? '' : 's'}${usedHelpers.size ? ` + ${usedHelpers.size} × ${helperThreads}` : ''}${usedGpu ? ' + WebGPU' : ''}`;
           finish({ samples, sampleRate: model.sampleRate, stats: { backend, model: model.name, seconds, elapsedMs, ttfaMs, rtf: seconds ? elapsedMs / 1000 / seconds : 0 } });
         }
       };
 
       const send = (/** @type {Worker} */ w, /** @type {number} */ index) => {
         busy.add(w);
-        if (w !== cpu) usedGpu = true;
+        if (w === helper.worker) usedGpu = true;
+        else if (w !== cpu) usedHelpers.add(w);
         pieceJobs.set(`${id}:${index}`, {
           worker: w,
           resolve: (s) => { busy.delete(w); if (over) return; results[index] = s; flush(); dispatch(); },
@@ -521,13 +598,13 @@ export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', mo
 
       function dispatch() {
         if (over) return;
-        for (const w of [cpu, helper.worker]) {
+        for (const w of [cpu, ...cpuHelpers, helper.worker]) {
           if (!w || busy.has(w)) continue;
           // Nothing runs beside the first piece: it is the one being waited for.
           if (!results[0] && (next > 0 || w !== cpu) && !retry.includes(0)) return;
-          // The GPU is slower per piece than the CPU: it takes work only while
-          // plenty remains, so the CPU always finishes the tail.
-          if (w !== cpu && pieces.length - next < 3 && !retry.length) continue;
+          // Helpers are slower per piece than the main worker: they take work
+          // only while enough remains, so the main worker finishes the tail.
+          if (w !== cpu && pieces.length - next < (w === helper.worker ? 3 : 2) && !retry.length) continue;
           const index = retry.length ? /** @type {number} */ (retry.shift()) : next < pieces.length ? next++ : -1;
           if (index < 0) return;
           send(w, index);

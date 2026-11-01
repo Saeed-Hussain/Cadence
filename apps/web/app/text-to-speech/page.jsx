@@ -10,8 +10,6 @@ import { useIsPlaying } from '@/lib/audio.js';
 import { ago } from '@/lib/format.js';
 import { DEFAULT_SETTINGS, useStore } from '@/lib/store.jsx';
 
-const LIMIT = 5000;
-
 const STARTERS = [
   { icon: 'book', label: 'Narrate a story', text: 'The lighthouse keeper had not seen a ship in eleven years. So when the lamp caught a sail on the horizon that night, she did not believe it — until the bell began to ring.' },
   { icon: 'smile', label: 'Tell a silly joke', text: 'Why did the speech engine refuse to go to the cloud? Because it already had everything it needed right here, on your own machine!' },
@@ -43,8 +41,7 @@ export default function TextToSpeech() {
   }, [text]);
 
   const loading = engineState.status !== 'ready';
-  const over = text.length > LIMIT;
-  const canGo = text.trim().length > 0 && !over && !generating;
+  const canGo = text.trim().length > 0 && !generating;
 
   const run = async () => {
     if (!canGo) return;
@@ -102,7 +99,7 @@ export default function TextToSpeech() {
             )}
           </div>
           <div className="editor-foot">
-            <span className={`count tnum${over ? ' over' : ''}`}>{text.length.toLocaleString()} / {LIMIT.toLocaleString()}</span>
+            <span className="count tnum">{text.length.toLocaleString()} characters</span>
             {text && (
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setText('')}>Clear</button>
             )}

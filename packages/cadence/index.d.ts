@@ -85,12 +85,14 @@ export interface EngineOptions {
   /** Where the app serves the ONNX Runtime WebAssembly files. Default '/ort/'. */
   wasmPaths?: string;
   /** Where the app serves the Swift weights, tried before the internet. Default '/models/'; null to skip. */
-  /** WebAssembly threads for both models. Default: 1 below eight logical cores, else all of them (up to 16). */
+  /** WebAssembly threads of HD and of Swift's main worker. Default: from the hardware (swiftPool, swiftThreads). */
   threads?: number;
   /** Where the app serves the runtime HD pins. Default '/ort-hd/'. */
   hdWasmPaths?: string;
   /** false: never use the GPU helper. A function is asked when Swift first loads. Default: use it where the hardware allows. */
   gpu?: boolean | (() => boolean);
+  /** false to speak Swift on one worker; by default helper workers are used where swiftPool allows. */
+  pool?: boolean | (() => boolean);
   modelPaths?: string | null;
 }
 
@@ -130,3 +132,5 @@ export function cpuThreads(): number;
 export function hasWebGPU(): boolean;
 /** The default thread count for Swift on this machine. */
 export function swiftThreads(): number;
+/** Swift's CPU pool for this hardware: main worker threads, helper workers, and threads each. */
+export function swiftPool(): { threads: number; helpers: number; helperThreads: number };
