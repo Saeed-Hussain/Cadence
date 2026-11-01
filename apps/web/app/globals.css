@@ -1035,7 +1035,6 @@ input[type='range']:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px 
   border-top: 1px solid var(--line);
 }
 .count { font: 500 12px var(--font-mono), monospace; color: var(--ink-3); }
-.count.over { color: var(--bad); }
 
 .starters {
   position: absolute;

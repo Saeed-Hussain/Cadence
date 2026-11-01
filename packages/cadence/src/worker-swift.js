@@ -34,7 +34,7 @@ self.onmessage = (/** @type {MessageEvent} */ { data }) => {
       ort.env.wasm.numThreads = data.threads ?? 1;
       ort.env.wasm.wasmPaths = data.wasmPaths;
       const local = data.modelPaths ? new URL(SWIFT_NAME, data.modelPaths).href : null;
-      const quiet = ep === 'webgpu'; // the helper loads in the background; progress belongs to the CPU worker
+      const quiet = ep === 'webgpu' || !!data.quiet; // helpers load in the background; progress belongs to the main worker
       for (let attempt = 1; ; attempt++) {
         // Read from this device's cache: say so, rather than "downloading".
         if (!quiet && await isCached(`${BASE}.onnx`)) self.postMessage({ type: 'progress', progress: 0.5, phase: 'cache' });
@@ -52,7 +52,7 @@ self.onmessage = (/** @type {MessageEvent} */ { data }) => {
           await piper.speak('Ready.');
           return piper;
         } catch (e) {
-          if (attempt > 1 || ep === 'webgpu') throw e;
+          if (attempt > 1 || quiet) throw e;
           // Weights that downloaded but will not load are damaged: drop them and fetch once more.
           await forget(`${BASE}.onnx`);
           await forget(`${BASE}.onnx.json`);
