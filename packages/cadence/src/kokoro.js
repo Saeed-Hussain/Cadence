@@ -11,16 +11,23 @@
  * section 4.1. Blending embeddings gives new voices that belong to nobody; the
  * library is built that way on top of the 28 English originals.
  *
- * This file runs wherever the engine runs — a Web Worker in the browser, or
- * Node for tests. It never touches the DOM.
+ * It runs on whatever ONNX Runtime it is handed (the same one as Swift), called
+ * directly. Through transformers.js the same passage (about 20 s of speech)
+ * took 26–31 s in the app on a Ryzen 5 7430U; direct, 20–22 s, and first audio
+ * about 2 s instead of 4–7 (tools/bench/hd). It never touches the DOM.
  */
 
-import { AutoTokenizer, StyleTextToSpeech2Model, Tensor, env } from '@huggingface/transformers';
+import { KOKORO_VOCAB } from './data/kokoro-vocab.js';
 import { kokoroPhonemes, loadLexicon } from './g2p.js';
 import { chunks } from './piper.js';
 
 export const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 export const SAMPLE_RATE = 24000;
+/**
+ * The first piece is kept short, because it is the one being waited for:
+ * 30 characters made first audio 1.6 s instead of 2.2 s (tools/bench/hd).
+ */
+const PIECES = { first: 30 };
 const VOICE_URL = (name) => `https://huggingface.co/${MODEL_ID}/resolve/main/voices/${name}.bin`;
 const STYLE = 256;
 
@@ -95,48 +102,39 @@ export function embedding(spec) {
 }
 
 /**
- * @param {{device?: 'wasm' | 'webgpu' | 'cpu', dtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16',
- *   expectedMb?: number, wasmPaths?: string, threads?: number, onProgress?: (fraction: number, phase: 'download' | 'init') => void}} options
+ * Kokoro on a given ONNX Runtime.
+ *
+ * @param {{ort: typeof import('onnxruntime-web'), model: Uint8Array, sessionOptions?: import('onnxruntime-web').InferenceSession.SessionOptions}} options
  */
-export async function loadKokoro({ device = 'wasm', dtype = 'fp32', expectedMb = 326, wasmPaths, threads, onProgress } = {}) {
-  const wasm = env.backends.onnx.wasm;
-  // Served by the app itself rather than a CDN, so it works offline.
-  if (wasmPaths && wasm) wasm.wasmPaths = wasmPaths;
-  if (threads && wasm) wasm.numThreads = threads;
-  /** @type {Map<string, {loaded: number, total: number}>} */
-  const files = new Map();
-  const progress_callback = (/** @type {any} */ e) => {
-    // The weights host does not always send a length, so progress is
-    // measured against the size the weights are known to be.
-    if (e.status === 'progress') {
-      files.set(e.file, { loaded: e.loaded ?? 0, total: e.total ?? 0 });
-      let loaded = 0;
-      let total = 0;
-      for (const f of files.values()) { loaded += f.loaded; total += f.total; }
-      total = Math.max(total, expectedMb * 1e6);
-      onProgress?.(Math.min(0.99, loaded / total), 'download');
-    } else if (e.status === 'done' && /.onnx$/.test(e.file ?? '')) {
-      onProgress?.(0.99, 'init');
-    }
+export async function loadKokoro({ ort, model, sessionOptions = { executionProviders: ['wasm'], graphOptimizationLevel: 'all' } }) {
+  const [session] = await Promise.all([ort.InferenceSession.create(model, sessionOptions), loadLexicon()]);
+  const output = session.outputNames[0];
+
+  /** @param {number[]} ids @param {Float32Array} style @param {number} speed */
+  const run = async (ids, style, speed) => {
+    const out = await session.run({
+      input_ids: new ort.Tensor('int64', BigInt64Array.from(ids, BigInt), [1, ids.length]),
+      style: new ort.Tensor('float32', style, [1, STYLE]),
+      speed: new ort.Tensor('float32', new Float32Array([speed]), [1]),
+    });
+    return /** @type {Float32Array} */ (out[output].data);
   };
-  const [model, tokenizer] = await Promise.all([
-    StyleTextToSpeech2Model.from_pretrained(MODEL_ID, { dtype, device: /** @type {any} */ (device), progress_callback }),
-    AutoTokenizer.from_pretrained(MODEL_ID, { progress_callback }),
-    loadLexicon(),
-  ]);
 
   /** @param {string} phonemes @param {VoiceSpec} voice @param {number} speed */
   const speak = async (phonemes, voice, speed) => {
-    const { input_ids: ids } = tokenizer(phonemes, { truncation: true });
+    // Id 0 pads both ends; symbols outside the vocabulary are dropped.
+    const ids = [0];
+    for (const ch of phonemes) { const id = KOKORO_VOCAB[ch]; if (id !== undefined) ids.push(id); }
+    ids.push(0);
     const table = await embedding(voice);
-    const row = STYLE * Math.min(Math.max(ids.dims.at(-1) - 2, 0), 509);
-    const { waveform } = await model({
-      input_ids: ids,
-      style: new Tensor('float32', table.slice(row, row + STYLE), [1, STYLE]),
-      speed: new Tensor('float32', [speed], [1]),
-    });
-    return /** @type {Float32Array} */ (waveform.data);
+    // One style row per input length.
+    const row = STYLE * Math.min(Math.max(ids.length - 2, 0), 509);
+    return run(ids, table.slice(row, row + STYLE), speed);
   };
+
+  // One short inference now, so the first one asked for does not also pay
+  // for the runtime's first-call setup. A blank style: no voice to fetch.
+  await run([0, KOKORO_VOCAB['ɹ'], KOKORO_VOCAB['ˈ'], KOKORO_VOCAB['ɛ'], KOKORO_VOCAB['d'], KOKORO_VOCAB['i'], KOKORO_VOCAB['.'], 0], new Float32Array(STYLE), 1);
 
   return {
     /**
@@ -149,7 +147,7 @@ export async function loadKokoro({ device = 'wasm', dtype = 'fp32', expectedMb =
      * @param {(samples: Float32Array, piece: string) => void} onChunk
      */
     async generate(text, voice, speed, onChunk) {
-      for (const piece of chunks(text)) {
+      for (const piece of chunks(text, PIECES)) {
         const audio = await speak(kokoroPhonemes(piece, voice.lang), voice, speed);
         onChunk(trim(audio), piece);
       }

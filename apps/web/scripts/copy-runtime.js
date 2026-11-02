@@ -2,10 +2,8 @@
  * Copy the WebAssembly inference runtimes into public/, so the app serves
  * them itself instead of loading them from a CDN. Runs before dev and build.
  *
- * Two versions, each where its own engine looks for it:
- *   public/ort/     onnxruntime-web as the engine depends on it, for Swift: the
- *                   CPU build, and the builds its WebGPU helper may ask for.
- *   public/ort-hd/  the version transformers.js pins, for HD.
+ * public/ort/ holds onnxruntime-web as the engine depends on it, for both
+ * models: the CPU build, and the builds Swift's WebGPU helper may ask for.
  */
 
 import { copyFile, mkdir } from 'node:fs/promises';
@@ -25,7 +23,7 @@ function dist(fromPackage) {
 
 const RUNTIME = ['ort-wasm-simd-threaded', 'ort-wasm-simd-threaded.jsep', 'ort-wasm-simd-threaded.asyncify', 'ort-wasm-simd-threaded.jspi'];
 
-for (const [from, to] of [['packages/cadence', 'ort'], ['node_modules/@huggingface/transformers', 'ort-hd']]) {
+for (const [from, to] of [['packages/cadence', 'ort']]) {
   const src = dist(from);
   const out = new URL(`../public/${to}/`, import.meta.url);
   await mkdir(out, { recursive: true });
@@ -36,4 +34,4 @@ for (const [from, to] of [['packages/cadence', 'ort'], ['node_modules/@huggingfa
     }
   }
 }
-console.log('Inference runtimes copied to public/ort/ (Swift) and public/ort-hd/ (HD)');
+console.log('Inference runtime copied to public/ort/');
