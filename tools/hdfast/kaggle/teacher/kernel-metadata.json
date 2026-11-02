@@ -1,0 +1,1 @@
+{"id": "saeedhussain56/cadence-hdfast-teacher", "title": "cadence-hdfast-teacher", "code_file": "gen.py", "language": "python", "kernel_type": "script", "is_private": true, "enable_gpu": true, "enable_internet": true, "machine_shape": "NvidiaTeslaT4", "dataset_sources": ["saeedhussain56/cadence-hdfast-text"], "competition_sources": [], "kernel_sources": []}
