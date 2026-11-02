@@ -10,7 +10,6 @@ its own source.
 |---|---|---|
 | CMU Pronouncing Dictionary | The pronunciation lexicon (`packages/cadence/src/data/lexicon.bin`, derived) | BSD 2-clause, reproduced below |
 | ONNX Runtime Web (`onnxruntime-web`) | Running the models in the browser | MIT |
-| Transformers.js (`@huggingface/transformers`) | Running the HD model | Apache-2.0 |
 | ONNX Runtime Node (`onnxruntime-node`), optional | Running the fast model natively in Node | MIT |
 
 ## Downloaded at run time, not shipped

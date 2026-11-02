@@ -8,7 +8,6 @@ out
 
 # Inference runtime, copied from node_modules before dev and build.
 apps/web/public/ort/
-apps/web/public/ort-hd/
 
 # The offline shell's file list, written after each build.
 apps/web/public/sw-manifest.json

@@ -14,7 +14,6 @@
     }
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.8.1",
     "onnxruntime-web": "1.30.0"
   },
   "types": "./index.d.ts",

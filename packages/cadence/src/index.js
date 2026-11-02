@@ -17,7 +17,7 @@ import { estimatePitch } from './dsp.js';
 import { isCached } from './download.js';
 import { chunks as planPieces } from './piper.js';
 import { PREVIEW_TEXT, VOICES, matchPitch } from './voices.js';
-import { SWIFT_FILES } from './weights.js';
+import { HD_MODEL, SWIFT_FILES } from './weights.js';
 
 export { FACETS, PREVIEW_TEXT, VOICES, matchPitch } from './voices.js';
 export { encodeWav } from './wav.js';
@@ -129,10 +129,9 @@ export function swiftGpuPlanned() {
 }
 
 /**
- * @param {{wasmPaths?: string, hdWasmPaths?: string, modelPaths?: string | null, threads?: number, pool?: boolean | (() => boolean), gpu?: boolean | (() => boolean)}} [options]
- *   wasmPaths: where the app serves Swift's WebAssembly runtime (see
- *   apps/web/scripts/copy-runtime.js); hdWasmPaths: the version HD's
- *   transformers.js pins. modelPaths: where it serves the Swift weights,
+ * @param {{wasmPaths?: string, modelPaths?: string | null, threads?: number, pool?: boolean | (() => boolean), gpu?: boolean | (() => boolean)}} [options]
+ *   wasmPaths: where the app serves the WebAssembly runtime both models run
+ *   on (see apps/web/scripts/copy-runtime.js). modelPaths: where it serves the Swift weights,
  *   tried before the internet (apps/web/scripts/fetch-model.js); null to
  *   always use the internet. threads: WebAssembly threads of the main
  *   worker; by default chosen from the hardware (`swiftPool`,
@@ -142,7 +141,7 @@ export function swiftGpuPlanned() {
  *   allows. A function is asked when Swift first loads, not when the engine
  *   is made.
  */
-export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', modelPaths = '/models/', threads, pool = true, gpu = true } = {}) {
+export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', threads, pool = true, gpu = true } = {}) {
   // Decided when Swift first loads. With a GPU helper planned, the CPU worker
   // leaves two threads for it to drive the GPU with.
   let gpuPlanned = false;
@@ -289,7 +288,7 @@ export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', mo
       });
       w.postMessage({
         type: 'load',
-        wasmPaths: new URL(id === 'swift' ? wasmPaths : hdWasmPaths, location.href).href,
+        wasmPaths: new URL(wasmPaths, location.href).href,
         modelPaths: modelPaths ? new URL(modelPaths, location.href).href : null,
         threads: id === 'swift' ? cpuWorkerThreads : threads ?? swiftThreads(),
       });
@@ -298,13 +297,13 @@ export function createEngine({ wasmPaths = '/ort/', hdWasmPaths = '/ort-hd/', mo
 
     /**
      * Whether a model's weights are stored on this device, so it loads with
-     * the network off. Only the Swift files are tracked; HD's are kept by
-     * its own runtime, and report false until it has loaded once this visit.
+     * the network off. HD's voices are fetched as they are first used, so a
+     * voice never spoken may still need the network.
      *
      * @param {ModelId} id
      */
     async onDevice(id) {
-      if (id === 'hd') return runtimes.hd.state.status === 'ready';
+      if (id === 'hd') return isCached(HD_MODEL);
       const hits = await Promise.all(SWIFT_FILES.map(isCached));
       return hits.every(Boolean);
     },

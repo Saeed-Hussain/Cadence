@@ -82,13 +82,11 @@ export interface SynthesizeRequest {
 }
 
 export interface EngineOptions {
-  /** Where the app serves the ONNX Runtime WebAssembly files. Default '/ort/'. */
+  /** Where the app serves the ONNX Runtime WebAssembly files, for both models. Default '/ort/'. */
   wasmPaths?: string;
   /** Where the app serves the Swift weights, tried before the internet. Default '/models/'; null to skip. */
   /** WebAssembly threads of HD and of Swift's main worker. Default: from the hardware (swiftPool, swiftThreads). */
   threads?: number;
-  /** Where the app serves the runtime HD pins. Default '/ort-hd/'. */
-  hdWasmPaths?: string;
   /** false: never use the GPU helper. A function is asked when Swift first loads. Default: use it where the hardware allows. */
   gpu?: boolean | (() => boolean);
   /** false to speak Swift on one worker; by default helper workers are used where swiftPool allows. */
