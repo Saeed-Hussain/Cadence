@@ -149,25 +149,34 @@ export async function loadKokoro({ ort, model, sessionOptions = { executionProvi
     async generate(text, voice, speed, onChunk) {
       for (const piece of chunks(text, PIECES)) {
         const audio = await speak(kokoroPhonemes(piece, voice.lang), voice, speed);
-        onChunk(trim(audio), piece);
+        onChunk(trim(audio, piece, speed), piece);
       }
     },
   };
 }
 
+/** Silence after a piece, by how it ends, in seconds: the same breaths as Swift's. */
+const PAUSE = { '.': 0.28, '!': 0.32, '?': 0.34, ',': 0.14, ';': 0.18, ':': 0.18, '—': 0.14 };
+
 /**
- * Kokoro pads each sentence with a little silence at both ends. Keep a short,
- * even breath between sentences instead of an uneven gap.
+ * Kokoro pads each piece with uneven silence at both ends. Cut it to the
+ * voice, then add the breath a reader takes at that punctuation: a short one
+ * at a comma, a longer one at a full stop or a question.
  *
- * @param {Float32Array} a
+ * @param {Float32Array} a @param {string} piece @param {number} speed
  */
-function trim(a) {
+function trim(a, piece, speed) {
   const floor = 0.004;
   let s = 0;
   let e = a.length - 1;
   while (s < e && Math.abs(a[s]) < floor) s++;
   while (e > s && Math.abs(a[e]) < floor) e--;
   const lead = Math.round(SAMPLE_RATE * 0.04);
-  const tail = Math.round(SAMPLE_RATE * 0.22);
-  return a.slice(Math.max(0, s - lead), Math.min(a.length, e + tail));
+  // The last sound fades below the floor: keep its tail.
+  const fade = Math.round(SAMPLE_RATE * 0.05);
+  const voice = a.subarray(Math.max(0, s - lead), Math.min(a.length, e + fade));
+  const end = /** @type {keyof typeof PAUSE} */ (piece.replace(/["')]]+$/, '').slice(-1));
+  const out = new Float32Array(voice.length + Math.round((SAMPLE_RATE * (PAUSE[end] ?? 0.02)) / speed));
+  out.set(voice);
+  return out;
 }
