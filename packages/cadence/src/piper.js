@@ -104,12 +104,17 @@ export function sentences(text) {
  * The pieces the engine streams, planned so playback never waits.
  *
  * Piece k+1 is generated while piece k plays, so a gap opens whenever a piece
- * takes longer to make than the one before it takes to hear. Sentences longer
- * than a cap are split at clause punctuation, or failing that between words,
- * and the cap grows piece by piece: a short first piece for quick first
- * audio, then longer ones once playback is ahead of the engine. Measured
- * (tools/bench/pool): a 60-character first piece halves time to first
- * audio against 120 (433 → 224 ms) with no gaps after it.
+ * takes longer to make than the one before it takes to hear. The cap grows
+ * piece by piece: a short first piece for quick first audio, then longer
+ * ones once playback is ahead of the engine. Measured (tools/bench/pool): a
+ * 60-character first piece halves time to first audio against 120
+ * (433 → 224 ms) with no gaps after it.
+ *
+ * Each piece is spoken on its own, with its own intonation and a breath
+ * after it, so pieces end only where a reader would pause: a sentence end,
+ * or clause punctuation. A sentence longer than the cap is cut at its last
+ * clause inside the cap, or else at its first one after it; it is cut
+ * between words only when it runs past `max` with no punctuation at all.
  *
  * @param {string} text
  * @param {{first?: number, growth?: number, max?: number}} [options]  caps, in characters
@@ -121,10 +126,16 @@ export function chunks(text, { first = 60, growth = 1.6, max = 260 } = {}) {
   for (const s of sentences(normalize(text))) {
     let rest = s;
     while (rest.length > cap) {
-      const head = rest.slice(0, cap);
-      const clause = Math.max(head.lastIndexOf(', '), head.lastIndexOf('; '), head.lastIndexOf(': '), head.lastIndexOf(' — '));
-      const space = head.lastIndexOf(' ');
-      const cut = clause > cap * 0.4 ? clause + 1 : space > 0 ? space : cap;
+      const clauses = [...rest.matchAll(/[,;:](?= )| —(?= )/g)].map((m) => m.index + m[0].length).filter((i) => i >= 8 && i < rest.length - 1);
+      const inside = clauses.filter((i) => i <= cap).at(-1);
+      const after = clauses.find((i) => i > cap && i <= max);
+      let cut = inside ?? after ?? -1;
+      if (cut < 0) {
+        // No clause to end on: keep the sentence whole if it fits, else cut between words.
+        if (rest.length <= max) break;
+        cut = rest.lastIndexOf(' ', max);
+        if (cut <= 0) cut = max;
+      }
       out.push(rest.slice(0, cut).trim());
       rest = rest.slice(cut).trim();
       cap = Math.min(max, Math.round(cap * growth));

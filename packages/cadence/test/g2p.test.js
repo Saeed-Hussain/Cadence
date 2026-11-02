@@ -64,3 +64,29 @@ test('initialisms are spelled, even when they are also dictionary words', async 
   assert.equal(await phonemize('NO'), 'nˈoʊ');
   assert.equal(await phonemize('NASA'), 'nˈæsə');
 });
+
+test('dates, fractions, degrees, multipliers, codes and web addresses become words', () => {
+  assert.equal(normalize('on 03/04/2025'), 'on March fourth, twenty twenty five');
+  assert.equal(normalize('1/2 and 3/4'), 'one half and three quarters');
+  assert.equal(normalize('rated 4/5'), 'rated four out of five');
+  assert.equal(normalize('38°C'), 'thirty eight degrees Celsius');
+  assert.equal(normalize('10x faster'), 'ten times faster');
+  assert.equal(normalize('Q3 and 4K'), 'Q three and four K');
+  assert.equal(normalize('COVID-19'), 'COVID-nineteen');
+  assert.equal(normalize('cadence.ai'), 'cadence dot AI');
+  assert.equal(normalize('9:30 am'), 'nine thirty AM');
+  assert.equal(normalize('Bring pens, paper, etc. Then sit.'), 'Bring pens, paper, et cetera. Then sit.');
+});
+
+test('words spelled alike are said the way their sentence means', async () => {
+  assert.equal(await phonemize('Yesterday I read it'), 'jˈɛstɚdˌeɪ aɪ ɹˈɛd ɪt');
+  assert.equal(await phonemize('I will read it'), 'aɪ wɪl ɹˈiːd ɪt');
+  assert.equal(await phonemize('the show was live'), 'ðə ʃˈoʊ wʌz lˈaɪv');
+  assert.equal(await phonemize('we live here'), 'wiː lˈɪv hˈɪɹ');
+  assert.equal(await phonemize('please record this'), 'plˈiːz ɹɪkˈɔːɹd ðɪs');
+  assert.equal(await phonemize('a new record'), 'ɐ nˈuː ɹˈɛkɚd');
+  assert.equal(await phonemize('wind the clock'), 'wˈaɪnd ðə klˈɑːk');
+  // Normalising twice changes nothing, tags included.
+  const once = normalize('Yesterday I read the record. Wind it at 9:30 am.');
+  assert.equal(normalize(once), once);
+});

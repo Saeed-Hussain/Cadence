@@ -5,7 +5,10 @@
  * pull every app that ships Cadence under the GPL; this produces the same kind
  * of IPA from permissively licensed parts instead:
  *
- *   1. normalise — numbers, money, times, ordinals, abbreviations to words
+ *   1. normalise — numbers, money, times, dates, fractions, units, web
+ *                  addresses, abbreviations to words; then words spelled the
+ *                  same but said differently ("read", "live", "record") are
+ *                  tagged with the sense their sentence gives them
  *   2. look up   — CMUdict (BSD 2-clause), 135,000 words, in data/lexicon.bin
  *   3. derive    — plurals, possessives, -ed, -ing, compounds from known words
  *   4. guess     — letter-to-sound rules for anything left
@@ -75,9 +78,37 @@ const CURRENCY = { $: ['dollar', 'dollars', 'cent', 'cents'], '£': ['pound', 'p
 const ABBREVIATIONS = [
   [/\bDr\.(?=\s+[A-Z])/g, 'Doctor'], [/\bMr\./g, 'Mister'], [/\bMrs\./g, 'Missus'], [/\bMs\./g, 'Miz'],
   [/\bProf\.(?=\s+[A-Z])/g, 'Professor'], [/\bSt\.(?=\s+[A-Z])/g, 'Saint'], [/\bJr\./g, 'Junior'], [/\bSr\./g, 'Senior'],
-  [/\bNo\.(?=\s*\d)/g, 'number'], [/\be\.g\./gi, 'for example'], [/\bi\.e\./gi, 'that is'], [/\betc\./gi, 'et cetera'],
+  [/\bNo\.(?=\s*\d)/g, 'number'], [/\be\.g\./gi, 'for example'], [/\bi\.e\./gi, 'that is'],
+  // Ending a sentence, "etc." is also its full stop.
+  [/\betc\.(?=\s*$|\s+[A-Z"“])/g, 'et cetera.'], [/\betc\./gi, 'et cetera'],
   [/\bvs\.?(?=\s)/gi, 'versus'], [/\bapprox\./gi, 'approximately'], [/\bDept\./g, 'Department'],
 ];
+
+/** Words written in mixed case or with symbols, as they are said. */
+const SPOKEN = [
+  // One word each, said as in FIXES below.
+  [/\biOS\b/g, 'ios'], [/\bmacOS\b/g, 'macos'], [/\biPhone(s?)\b/g, 'iphone$1'], [/\biPad(s?)\b/g, 'ipad$1'],
+  [/\biPod(s?)\b/g, 'ipod$1'], [/\biMac(s?)\b/g, 'imac$1'], [/\bWi-?Fi\b/gi, 'wifi'], [/\bOpenAI\b/g, 'open AI'],
+  [/\bChatGPT\b/g, 'chat GPT'], [/\bGitHub\b/g, 'github'], [/\bYouTube\b/g, 'youtube'], [/\bLinkedIn\b/g, 'linkedin'],
+];
+
+/** How the end of a web address is said: words where people say a word, letters where they spell. */
+const TLD = { com: 'com', org: 'org', net: 'net', gov: 'gov', app: 'app', dev: 'dev', info: 'info', co: 'co', me: 'me', so: 'so', biz: 'biz', xyz: 'X Y Z' };
+const WEB = /\b((?:[A-Za-z0-9-]+\.)+)(com|org|net|io|ai|dev|app|co|uk|us|edu|gov|me|tv|ly|so|xyz|info|biz|pk|in|de|fr|ca|au)\b(?![.\w-]*\w)/gi;
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** 1/2 → one half, 3/4 → three quarters, 5/8 → five eighths, 4/5 → four out of five. @param {number} n @param {number} d */
+function fractionWords(n, d) {
+  const name = d === 2 ? ['half', 'halves'] : d === 4 ? ['quarter', 'quarters'] : null;
+  if (name) return `${numberWords(n)} ${name[n === 1 ? 0 : 1]}`;
+  if (d === 5 || d === 10 || d === 100) return `${numberWords(n)} out of ${numberWords(d)}`;
+  if (d <= 16) {
+    const o = ordinalWords(d);
+    return `${numberWords(n)} ${n === 1 ? o : `${o}s`}`;
+  }
+  return `${numberWords(n)} slash ${numberWords(d)}`;
+}
 
 /**
  * Written text to speakable words. Idempotent: normalising twice changes
@@ -87,8 +118,32 @@ const ABBREVIATIONS = [
  */
 export function normalize(text) {
   let s = text.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...');
+  for (const [re, to] of SPOKEN) s = s.replace(re, /** @type {string} */ (to));
+  // Web addresses: "https://www.cadence.ai" → "W W W dot cadence dot AI".
+  s = s.replace(/\bhttps?:\/\//gi, '').replace(/\bwww\./gi, 'W W W dot ')
+    .replace(WEB, (_, name, tld) => {
+      const lower = tld.toLowerCase();
+      return `${name.split('.').filter(Boolean).join(' dot ')} dot ${TLD[/** @type {keyof typeof TLD} */ (lower)] ?? lower.toUpperCase()}`;
+    });
   for (const [re, to] of ABBREVIATIONS) s = s.replace(re, /** @type {string} */ (to));
   s = s
+    // Dates, month first as Americans write them (day first when it must be): 03/04/2025.
+    .replace(/\b(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})\b/g, (whole, a, b, y) => {
+      let [m, d] = [Number(a), Number(b)];
+      if (m > 12 && d <= 12) [m, d] = [d, m];
+      if (m < 1 || m > 12 || d < 1 || d > 31) return whole;
+      return `${MONTHS[m - 1]} ${ordinalWords(d)}, ${y.length === 2 ? numberWords(Number(y)) : y}`;
+    })
+    .replace(/\b24\/7\b/g, 'twenty four seven')
+    // Fractions: 1/2, 3/4, 5/8.
+    .replace(/\b(\d{1,3})\/(\d{1,3})\b/g, (_, n, d) => (Number(d) > 1 ? fractionWords(Number(n), Number(d)) : `${n} slash ${d}`))
+    // Temperatures and angles: 38°C, 100 °F, 90°.
+    .replace(/(-?\d+(?:\.\d+)?)\s?°\s?([CF])\b/g, (_, n, u) => `${n} ${n === '1' ? 'degree' : 'degrees'} ${u === 'C' ? 'Celsius' : 'Fahrenheit'}`)
+    .replace(/(\d)\s?°/g, '$1 degrees')
+    // "10x faster" → ten times; Q3, MP3, 4K, 5G, 3D → letters and numbers apart.
+    .replace(/\b(\d+(?:\.\d+)?)x\b/gi, '$1 times')
+    .replace(/\b([A-Z]{1,3})(\d+)\b/g, '$1 $2')
+    .replace(/\b(\d+)([KGD])\b/g, '$1 $2')
     // Money: $1,250.50, £3, €20.
     .replace(/([$£€])\s?(\d[\d,]*)(?:\.(\d{1,2}))?(\s?(?:thousand|million|billion|trillion))?\b/g, (_, cur, whole, cents, scale) => {
       const [one, many, cOne, cMany] = CURRENCY[/** @type {keyof typeof CURRENCY} */ (cur)];
@@ -100,7 +155,7 @@ export function normalize(text) {
       return out;
     })
     // Times: 7:45, 7:05, 7:00, with am/pm.
-    .replace(/\b(\d{1,2}):(\d{2})\s?([ap])\.?m\.?\b/gi, (_, h, m, ap) => `${timeWords(+h, +m)} ${ap.toLowerCase() === 'a' ? 'A M' : 'P M'}`)
+    .replace(/\b(\d{1,2}):(\d{2})\s?([ap])\.?m\.?\b/gi, (_, h, m, ap) => `${timeWords(+h, +m)} ${ap.toLowerCase() === 'a' ? 'AM' : 'PM'}`)
     .replace(/\b(\d{1,2}):(\d{2})\b/g, (_, h, m) => timeWords(+h, +m))
     // Ordinals: 1st, 22nd, 3rd, 4th.
     .replace(/\b(\d+)(st|nd|rd|th)\b/gi, (_, n) => ordinalWords(Number(n)))
@@ -113,13 +168,161 @@ export function normalize(text) {
       const w = yearWords(Number(y));
       return plural ? w.replace(/(\w+)$/, (x) => (x.endsWith('y') ? `${x.slice(0, -1)}ies` : `${x}s`)) : w;
     })
-    // Other numbers, with thousands separators and decimals.
-    .replace(/(-)?\b(\d[\d,]*)(?:\.(\d+))?\b/g, (_, minus, whole, frac) => `${minus ? 'minus ' : ''}${decimalWords(whole, frac)}`)
+    // Other numbers, with thousands separators and decimals. A hyphen is a
+    // minus sign only when no word comes before it: "COVID-19" is not minus.
+    .replace(/(?:(?<!\w)(-))?\b(\d[\d,]*)(?:\.(\d+))?\b/g, (_, minus, whole, frac) => `${minus ? 'minus ' : ''}${decimalWords(whole, frac)}`)
     .replace(/&/g, ' and ')
     .replace(/\+/g, ' plus ')
     .replace(/@/g, ' at ')
     .replace(/[ \t]+/g, ' ');
-  return s;
+  return senses(s);
+}
+
+// ─── Words spelled alike, said differently ─────────────────────────────────
+
+/** Each sense as ARPAbet. A sense tag is written after the word: "read_past". */
+const SENSES = {
+  read: { present: 'R IY1 D', past: 'R EH1 D' },
+  live: { verb: 'L IH1 V', adj: 'L AY1 V' },
+  lives: { verb: 'L IH1 V Z', noun: 'L AY1 V Z' },
+  wind: { noun: 'W IH1 N D', verb: 'W AY1 N D' },
+  lead: { verb: 'L IY1 D', metal: 'L EH1 D' },
+  tear: { noun: 'T IH1 R', verb: 'T EH1 R' },
+  tears: { noun: 'T IH1 R Z', verb: 'T EH1 R Z' },
+  close: { verb: 'K L OW1 Z', adj: 'K L OW1 S' },
+  use: { verb: 'Y UW1 Z', noun: 'Y UW1 S' },
+  wound: { noun: 'W UW1 N D', past: 'W AW1 N D' },
+  record: { noun: 'R EH1 K ER0 D', verb: 'R IH0 K AO1 R D' },
+  records: { noun: 'R EH1 K ER0 D Z', verb: 'R IH0 K AO1 R D Z' },
+  present: { noun: 'P R EH1 Z AH0 N T', verb: 'P R IY0 Z EH1 N T' },
+  presents: { noun: 'P R EH1 Z AH0 N T S', verb: 'P R IY0 Z EH1 N T S' },
+  object: { noun: 'AA1 B JH EH0 K T', verb: 'AH0 B JH EH1 K T' },
+  project: { noun: 'P R AA1 JH EH0 K T', verb: 'P R AH0 JH EH1 K T' },
+  projects: { noun: 'P R AA1 JH EH0 K T S', verb: 'P R AH0 JH EH1 K T S' },
+  permit: { noun: 'P ER1 M IH0 T', verb: 'P ER0 M IH1 T' },
+  increase: { noun: 'IH1 N K R IY2 S', verb: 'IH0 N K R IY1 S' },
+  decrease: { noun: 'D IY1 K R IY2 S', verb: 'D IH0 K R IY1 S' },
+  produce: { noun: 'P R OW1 D UW0 S', verb: 'P R AH0 D UW1 S' },
+  progress: { noun: 'P R AA1 G R EH2 S', verb: 'P R AH0 G R EH1 S' },
+  refuse: { noun: 'R EH1 F Y UW2 S', verb: 'R AH0 F Y UW1 Z' },
+  conduct: { noun: 'K AA1 N D AH0 K T', verb: 'K AH0 N D AH1 K T' },
+  contract: { noun: 'K AA1 N T R AE2 K T', verb: 'K AH0 N T R AE1 K T' },
+  suspect: { noun: 'S AH1 S P EH2 K T', verb: 'S AH0 S P EH1 K T' },
+  conflict: { noun: 'K AA1 N F L IH0 K T', verb: 'K AH0 N F L IH1 K T' },
+  convict: { noun: 'K AA1 N V IH0 K T', verb: 'K AH0 N V IH1 K T' },
+  export: { noun: 'EH1 K S P AO0 R T', verb: 'IH0 K S P AO1 R T' },
+  import: { noun: 'IH1 M P AO0 R T', verb: 'IH0 M P AO1 R T' },
+  insult: { noun: 'IH1 N S AH0 L T', verb: 'IH0 N S AH1 L T' },
+  protest: { noun: 'P R OW1 T EH2 S T', verb: 'P R AH0 T EH1 S T' },
+  rebel: { noun: 'R EH1 B AH0 L', verb: 'R IH0 B EH1 L' },
+  subject: { noun: 'S AH1 B JH IH0 K T', verb: 'S AH0 B JH EH1 K T' },
+  desert: { noun: 'D EH1 Z ER0 T', verb: 'D IH0 Z ER1 T' },
+};
+
+const set = (/** @type {string} */ s) => new Set(s.trim().split(/\s+/));
+/** Words that come before a noun. */
+const DET = set(`a an the this that these those my your his her its our their no every each any some another
+  one two three four five six seven eight nine ten many few several first last next new old big small good great
+  best whole such what which whose`);
+/** Words that come before a verb in its plain form. */
+const TO_VERB = set(`to will would can could should shall must might may please let's lets don't doesn't didn't
+  won't can't cannot couldn't wouldn't shouldn't never i you we they`);
+const BE = set(`is was are were be been being am it's that's he's she's we're you're they're i'm there's`);
+const PAST_WORDS = set('yesterday ago last earlier previously once');
+const PRESENT_AUX = set(`to will would can could should shall must might may do does don't doesn't didn't please
+  let's lets can't won't cannot couldn't wouldn't shouldn't i'll you'll we'll they'll he'll she'll`);
+const NOT_PAST = set('need needed feed speed seed bed red indeed hundred bred shed sled shred weed breed greed proceed exceed succeed');
+const LIVE_NOUNS = set(`music show shows stream streams streaming broadcast broadcasts event events concert concerts
+  audience performance performances wire feed updates coverage action bait animals recording version demo chat video
+  session sessions tv television radio sports match game data site mode wires ammunition`);
+const METAL_NEXT = set('pipe pipes paint poisoning pencil pencils bullet bullets weight weights shot levels exposure');
+const CLOSE_ADJ_NEXT = set(`to by call friend friends enough together behind relationship attention contact look eye
+  second family race`);
+const CLOSE_ADJ_PREV = set(`so too very quite really pretty is was are were be been get getting got stay stayed came
+  come comes coming it's that's how as a`);
+const OBJECT_NEXT = set('up down the a an it your my his her them this that back around through our their');
+
+/**
+ * The sense of a word in SENSES, from the words around it in its sentence.
+ * Only a confident reading is tagged; otherwise the dictionary's own
+ * pronunciation stands.
+ *
+ * @param {string[]} w the sentence's words, lowercase
+ * @param {number} i
+ * @returns {string | undefined}
+ */
+function sense(w, i) {
+  const word = w[i];
+  const prev = w[i - 1] ?? '';
+  const prev2 = w[i - 2] ?? '';
+  const next = w[i + 1] ?? '';
+  const verbCue = TO_VERB.has(prev) || /'ll$|n't$/.test(prev);
+  const start = i === 0 || prev === 'and' || prev === 'then';
+  switch (word) {
+    case 'read': {
+      if (PRESENT_AUX.has(prev)) return 'present';
+      if (BE.has(prev) || /^(had|has|have|already|just|i've|you've|we've|they've|i'd|you'd|he'd|she'd|we'd|they'd)$/.test(prev)) return 'past';
+      // "Have you read it?": a perfect tense a word or two back.
+      if (w.slice(Math.max(0, i - 3), i).some((x) => /^(have|has|had|haven't|hasn't|hadn't)$/.test(x))) return 'past';
+      // "He read", not "he reads": the plain form after he, she or it is the past.
+      if (/^(he|she|it)$/.test(prev)) return 'past';
+      if (w.some((x) => PAST_WORDS.has(x))) return 'past';
+      // A story told in the past: another verb in the sentence ends in -ed.
+      if (w.some((x, k) => k !== i && /^[a-z]{3,}ed$/.test(x) && !NOT_PAST.has(x))) return 'past';
+      return undefined;
+    }
+    case 'live':
+      if (BE.has(prev) || /^(a|an|the|go|goes|going|went|gone|now)$/.test(prev)) return 'adj';
+      if (LIVE_NOUNS.has(next) && !verbCue) return 'adj';
+      return undefined;
+    case 'lives':
+      if (DET.has(prev) || /^(save|saves|saved|saving|lost|changed|change|changes|millions|thousands|of|real|daily|private|personal|busy|whose)$/.test(prev)) return 'noun';
+      return 'verb';
+    case 'wind':
+      if (verbCue || (start && OBJECT_NEXT.has(next)) || ((next === 'up' || next === 'down') && !DET.has(prev))) return 'verb';
+      return 'noun';
+    case 'lead':
+      if (METAL_NEXT.has(next) || (prev === 'of' && /^(made|full|piece|block|sheet|ton|tons)$/.test(prev2))) return 'metal';
+      return undefined;
+    case 'tear':
+    case 'tears':
+      if (prev === 'and' && prev2 === 'wear') return 'verb';
+      if (verbCue || /^(he|she|it)$/.test(prev) || /^(up|down|apart|off|open|into|through|out|away)$/.test(next)) return 'verb';
+      return 'noun';
+    case 'close':
+      if (CLOSE_ADJ_NEXT.has(next) || CLOSE_ADJ_PREV.has(prev)) return 'adj';
+      return undefined;
+    case 'use':
+      if (DET.has(prev) || /^(of|in|for|much|make|makes|made|making|fair|daily|personal|commercial|what's)$/.test(prev)) return 'noun';
+      return undefined;
+    case 'wound':
+      if (/^(i|he|she|we|they|you|it|was|were|had|has|have|then|and)$/.test(prev) && /^(up|down|the|it|around|through|his|her|its|their|my|your|back|tightly)$/.test(next)) return 'past';
+      return 'noun';
+    default:
+      // Noun or verb, by stress: a REcord, to reCORD. "A sharp increase": a
+      // describing word between the two (but "the prices increase" is a verb).
+      if (DET.has(prev) || (DET.has(prev2) && !TO_VERB.has(prev) && !BE.has(prev) && !/s$/.test(prev))) return 'noun';
+      if (verbCue || /^(he|she|it|who)$/.test(prev) || (start && OBJECT_NEXT.has(next))) return 'verb';
+      return undefined;
+  }
+}
+
+/** Tag every word in SENSES with its sense, sentence by sentence. @param {string} s */
+function senses(s) {
+  return s.replace(/[^.!?]+[.!?]*/g, (sentence) => {
+    const found = [...sentence.matchAll(/[A-Za-z][A-Za-z']*(?:_[a-z]+)?/g)];
+    const words = found.map((m) => m[0].toLowerCase());
+    let out = '';
+    let at = 0;
+    found.forEach((m, i) => {
+      if (!Object.hasOwn(SENSES, words[i])) return;
+      const tag = sense(words, i);
+      if (!tag) return;
+      out += `${sentence.slice(at, /** @type {number} */ (m.index))}${m[0]}_${tag}`;
+      at = /** @type {number} */ (m.index) + m[0].length;
+    });
+    return out + sentence.slice(at);
+  });
 }
 
 /** @param {number} h @param {number} m */
@@ -165,8 +368,18 @@ export function loadLexicon() {
 /** @param {string} encoded */
 const decode = (encoded) => [...encoded].map((c) => PHONES[c.charCodeAt(0) - 33]);
 
+/** Entries CMUdict gets wrong for running speech, and words it lacks. */
+const FIXES = {
+  thirty: 'TH ER1 T IY0',
+  wifi: 'W AY1 F AY2', iphone: 'AY1 F OW2 N', ipad: 'AY1 P AE2 D', ipod: 'AY1 P AA2 D', imac: 'AY1 M AE2 K',
+  ios: 'AY2 OW2 EH1 S', macos: 'M AE1 K OW2 EH2 S', github: 'G IH1 T HH AH2 B', youtube: 'Y UW1 T UW2 B',
+  linkedin: 'L IH1 NG K T IH2 N',
+};
+
 /** @param {string} word lowercase */
 function lookup(word) {
+  const fix = FIXES[/** @type {keyof typeof FIXES} */ (word)];
+  if (fix) return fix.split(' ');
   const hit = lexicon?.get(word) ?? lexicon?.get(american(word) ?? '');
   return hit ? decode(hit) : null;
 }
@@ -358,6 +571,15 @@ const CAPS_WORDS = new Set(`
  * @param {string} raw as written, case kept (for acronyms)
  */
 export function wordPhones(raw) {
+  // A sense tag from normalising: "read_past".
+  const tagged = /^([A-Za-z']+)_([a-z]+)$/.exec(raw);
+  if (tagged) {
+    const key = tagged[1].toLowerCase();
+    const forms = Object.hasOwn(SENSES, key) ? SENSES[/** @type {keyof typeof SENSES} */ (key)] : undefined;
+    const form = forms?.[/** @type {keyof typeof forms} */ (tagged[2])];
+    if (form) return /** @type {string} */ (form).split(' ');
+    raw = tagged[1];
+  }
   const word = raw.toLowerCase().replace(/^'+|'+$/g, (q) => (raw.endsWith("s'") ? q : ''));
   if (/^[a-z]{2,5}$/i.test(raw) && !/[aeiouy]/i.test(raw) && !lookup(word)) return spell(raw);
   // Two and three capitals are initialisms, spelled letter by letter, even when
@@ -460,7 +682,7 @@ function toBritish(ipa) {
  * @param {{dialect?: 'us' | 'gb'}} [options]
  */
 export function phonemizeSync(text, { dialect = 'us' } = {}) {
-  const words = text.split(/[^A-Za-z0-9'\-]+/).flatMap((w) => w.split('-')).filter((w) => /[A-Za-z]/.test(w));
+  const words = text.split(/[^A-Za-z0-9'_\-]+/).flatMap((w) => w.split('-')).filter((w) => /[A-Za-z]/.test(w));
   const ipa = words.map((w) => {
     const lower = w.toLowerCase();
     // Weak forms are for words, not initialisms: "US" is not "us".
