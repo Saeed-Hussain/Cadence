@@ -1,0 +1,1 @@
+{"id": "saeedhussain56/cadence-hdfast-copysynth", "title": "cadence-hdfast-copysynth", "code_file": "copysynth.py", "language": "python", "kernel_type": "script", "is_private": true, "enable_gpu": false, "enable_internet": true, "dataset_sources": [], "competition_sources": [], "kernel_sources": ["saeedhussain56/cadence-hdfast-teacher"]}

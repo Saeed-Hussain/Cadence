@@ -92,7 +92,7 @@ const StoreContext = createContext(/** @type {ReturnType<typeof useStoreValue> |
 function useStoreValue() {
   // ?gpu=0 keeps Swift off the GPU and ?pool=0 on one CPU worker, to compare.
   // Asked when Swift loads: during hydration the address has no query yet.
-  const engine = useMemo(() => createEngine({ gpu: () => !/[?&]gpu=0/.test(location.search), pool: () => !/[?&]pool=0/.test(location.search) }), []);
+  const engine = useMemo(() => createEngine({ gpu: () => !/[?&]gpu=0/.test(location.search), pool: () => !/[?&]pool=0/.test(location.search), hdFast: () => !/[?&]hd=whole/.test(location.search) }), []);
   // The engine on window.cadence, for trying things from the browser console:
   // await cadence.synthesize({ text: 'Hello', voice: 'hd_aurora' })
   useEffect(() => { /** @type {any} */ (window).cadence = engine; }, [engine]);

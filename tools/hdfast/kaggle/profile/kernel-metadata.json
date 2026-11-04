@@ -1,0 +1,1 @@
+{"id": "saeedhussain56/cadence-hdfast-profile", "title": "cadence-hdfast-profile", "code_file": "profile.py", "language": "python", "kernel_type": "script", "is_private": true, "enable_gpu": false, "enable_internet": true, "dataset_sources": ["saeedhussain56/cadence-hdfast-text"], "competition_sources": [], "kernel_sources": []}

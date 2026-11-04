@@ -10,7 +10,7 @@ const pieces = q.get('whole') ? [text] : chunks(text, q.get('first') ? { first: 
 
 const workers = spec.map((t) => {
   const w = new Worker(q.get('engine') ? 'worker-engine.js' : 'worker.js', { type: 'module' });
-  w.postMessage({ type: 'load', ep: t === 'g' ? 'webgpu' : (q.get('ep') ?? 'wasm'), threads: t === 'g' ? 1 : Number(t), file: q.get('file') ?? undefined });
+  w.postMessage({ type: 'load', ep: t === 'g' ? 'webgpu' : (q.get('ep') ?? 'wasm'), threads: t === 'g' ? 1 : Number(t), file: q.get('file') ?? undefined, fast: !!q.get('fast') });
   return w;
 });
 const ready = await Promise.all(workers.map((w) => new Promise((ok, no) => {
