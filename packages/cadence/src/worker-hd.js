@@ -1,6 +1,6 @@
 /**
  * The HD path's thread: Kokoro-82M on ONNX Runtime, the same runtime as
- * Swift. Inference never runs on the page's main thread, so the interface
+ * Swift; as HD-Fast where the app serves its files (see `loadKokoro`). Inference never runs on the page's main thread, so the interface
  * stays smooth while a paragraph is being spoken.
  *
  * Requests run one at a time, in order. A cancelled request stops at the next
@@ -8,9 +8,9 @@
  */
 
 import * as ort from 'onnxruntime-web/wasm';
-import { CACHE, download, forget } from './download.js';
+import { CACHE, download, forget, isCached } from './download.js';
 import { loadKokoro } from './kokoro.js';
-import { HD_BYTES, HD_MODEL } from './weights.js';
+import { HD_BYTES, HD_MODEL, HDFAST_BYTES, HDFAST_FILES } from './weights.js';
 
 /** @type {ReturnType<typeof loadKokoro> | null} */
 let loading = null;
@@ -30,6 +30,34 @@ async function earlierCopy() {
   } catch { return null; }
 }
 
+/** HD-Fast's two files, where the app serves them; null where it does not. */
+async function fastFiles(/** @type {string | null} */ modelPaths) {
+  if (!modelPaths) return null;
+  const urls = { front: new URL(HDFAST_FILES.front, modelPaths).href, back: new URL(HDFAST_FILES.back, modelPaths).href };
+  const here = await Promise.all(Object.values(urls).map(async (u) => (await isCached(u)) || (await fetch(u, { method: 'HEAD' }).then((r) => r.ok, () => false))));
+  return here.every(Boolean) ? urls : null;
+}
+
+/** @param {{front: string, back: string}} urls @param {(p: number, phase: string) => void} progress */
+async function loadFast(urls, progress) {
+  if (await isCached(urls.front) && await isCached(urls.back)) progress(0.5, 'cache');
+  const total = HDFAST_BYTES.front + HDFAST_BYTES.back;
+  const got = { front: 0, back: 0 };
+  const each = /** @type {const} */ (['front', 'back']).map((k) => download(urls[k], {
+    expectedBytes: HDFAST_BYTES[k],
+    onProgress: (p) => { got[k] = p * HDFAST_BYTES[k]; if (p < 1) progress(((got.front + got.back) / total) * 0.97, 'download'); },
+  }));
+  const [front, back] = await Promise.all(each);
+  progress(0.98, 'init');
+  try {
+    return await loadKokoro({ ort, fast: { front, back } });
+  } catch (e) {
+    // Damaged on this device: fetched again next time.
+    await forget(urls.front); await forget(urls.back);
+    throw e;
+  }
+}
+
 self.onmessage = (/** @type {MessageEvent} */ { data }) => {
   if (data.type === 'load') {
     loading ??= (async () => {
@@ -37,6 +65,14 @@ self.onmessage = (/** @type {MessageEvent} */ { data }) => {
       ort.env.wasm.numThreads = data.threads ?? 1;
       ort.env.wasm.wasmPaths = data.wasmPaths;
       const progress = (/** @type {number} */ p, /** @type {string} */ phase) => self.postMessage({ type: 'progress', progress: p, phase });
+      const fast = data.fast ? await fastFiles(data.modelPaths) : null;
+      if (fast) {
+        try {
+          const kokoro = await loadFast(fast, progress);
+          self.postMessage({ type: 'variant', variant: 'fast' });
+          return kokoro;
+        } catch { progress(0, 'download'); /* Kokoro whole, below */ }
+      }
       for (let attempt = 1; ; attempt++) {
         const old = attempt === 1 ? await earlierCopy() : null;
         if (old?.length === HD_BYTES) progress(0.5, 'cache');

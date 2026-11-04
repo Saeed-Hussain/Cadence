@@ -102,22 +102,37 @@ export function embedding(spec) {
 }
 
 /**
- * Kokoro on a given ONNX Runtime.
+ * Kokoro on a given ONNX Runtime: whole (`model`), or as HD-Fast (`fast`).
  *
- * @param {{ort: typeof import('onnxruntime-web'), model: Uint8Array, sessionOptions?: import('onnxruntime-web').InferenceSession.SessionOptions}} options
+ * HD-Fast keeps Kokoro's front half, everything up to its decoder (reading,
+ * pacing, pitch, the voice), and replaces the decoder, 94% of Kokoro's time,
+ * with a small network trained to predict the spectrogram Kokoro's decoder
+ * would make, and Vocos to turn that into sound (tools/hdfast). The same
+ * passage on a Ryzen 5 7430U, four threads: 26 s whole, 3.1 s as HD-Fast;
+ * first audio 3.6 s and 0.45 s (tools/hdfast/bench.js).
+ *
+ * @param {{ort: typeof import('onnxruntime-web'), model?: Uint8Array, fast?: {front: Uint8Array, back: Uint8Array},
+ *   sessionOptions?: import('onnxruntime-web').InferenceSession.SessionOptions}} options
  */
-export async function loadKokoro({ ort, model, sessionOptions = { executionProviders: ['wasm'], graphOptimizationLevel: 'all' } }) {
-  const [session] = await Promise.all([ort.InferenceSession.create(model, sessionOptions), loadLexicon()]);
-  const output = session.outputNames[0];
+export async function loadKokoro({ ort, model, fast, sessionOptions = { executionProviders: ['wasm'], graphOptimizationLevel: 'all' } }) {
+  const create = (/** @type {Uint8Array} */ m) => ort.InferenceSession.create(m, sessionOptions);
+  const [sessions] = await Promise.all([
+    fast ? Promise.all([create(fast.front), create(fast.back)]) : Promise.all([create(/** @type {Uint8Array} */ (model))]),
+    loadLexicon(),
+  ]);
+  const [session, back] = sessions;
 
   /** @param {number[]} ids @param {Float32Array} style @param {number} speed */
   const run = async (ids, style, speed) => {
-    const out = await session.run({
+    const inputs = {
       input_ids: new ort.Tensor('int64', BigInt64Array.from(ids, BigInt), [1, ids.length]),
       style: new ort.Tensor('float32', style, [1, STYLE]),
       speed: new ort.Tensor('float32', new Float32Array([speed]), [1]),
-    });
-    return /** @type {Float32Array} */ (out[output].data);
+    };
+    const out = await session.run(inputs);
+    if (!back) return /** @type {Float32Array} */ (out.waveform.data);
+    const sound = await back.run({ asr: out.asr, f0: out.f0, n: out.n, style: inputs.style });
+    return /** @type {Float32Array} */ (sound.waveform.data);
   };
 
   /** @param {string} phonemes @param {VoiceSpec} voice @param {number} speed */
@@ -127,8 +142,8 @@ export async function loadKokoro({ ort, model, sessionOptions = { executionProvi
     for (const ch of phonemes) { const id = KOKORO_VOCAB[ch]; if (id !== undefined) ids.push(id); }
     ids.push(0);
     const table = await embedding(voice);
-    // One style row per input length.
-    const row = STYLE * Math.min(Math.max(ids.length - 2, 0), 509);
+    // One style row per input length: the phoneme count less one, as in Kokoro's reference.
+    const row = STYLE * Math.min(Math.max(ids.length - 3, 0), 509);
     return run(ids, table.slice(row, row + STYLE), speed);
   };
 

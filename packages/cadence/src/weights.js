@@ -12,3 +12,11 @@ export const SWIFT_BYTES = 78_580_914;
 /** HD: Kokoro-82M in full precision (Apache-2.0). */
 export const HD_MODEL = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model.onnx';
 export const HD_BYTES = 325_532_232;
+
+/**
+ * HD-Fast: Kokoro's front half, cut from the model above, and HD-Fast's
+ * decoder (tools/hdfast). Served by the app itself from `modelPaths`; where
+ * they are not, HD runs Kokoro whole.
+ */
+export const HDFAST_FILES = /** @type {const} */ ({ front: 'hdfast/kokoro-front.onnx', back: 'hdfast/hdfast-back.onnx' });
+export const HDFAST_BYTES = { front: 112_061_428, back: 106_852_640 };

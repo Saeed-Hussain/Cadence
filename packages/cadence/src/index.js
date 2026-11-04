@@ -17,7 +17,7 @@ import { estimatePitch } from './dsp.js';
 import { isCached } from './download.js';
 import { chunks as planPieces } from './piper.js';
 import { PREVIEW_TEXT, VOICES, matchPitch } from './voices.js';
-import { HD_MODEL, SWIFT_FILES } from './weights.js';
+import { HD_MODEL, HDFAST_FILES, SWIFT_FILES } from './weights.js';
 
 export { FACETS, PREVIEW_TEXT, VOICES, matchPitch } from './voices.js';
 export { encodeWav } from './wav.js';
@@ -49,9 +49,9 @@ export const MODELS = /** @type {const} */ ([
   {
     id: 'hd',
     name: 'Cadence HD',
-    tagline: 'Highest quality · needs a fast CPU',
-    description: 'Kokoro-82M in full precision. The most natural voices, slower than real time on older machines.',
-    weights: 'Kokoro-82M fp32 · 326 MB',
+    tagline: 'Highest quality · fast',
+    description: 'Kokoro-82M, with HD-Fast in place of its decoder: the most natural voices, about eight times faster than Kokoro whole.',
+    weights: 'Kokoro-82M front half + HD-Fast · 219 MB',
     sampleRate: 24000,
   },
 ]);
@@ -129,7 +129,8 @@ export function swiftGpuPlanned() {
 }
 
 /**
- * @param {{wasmPaths?: string, modelPaths?: string | null, threads?: number, pool?: boolean | (() => boolean), gpu?: boolean | (() => boolean)}} [options]
+ * @param {{wasmPaths?: string, modelPaths?: string | null, threads?: number, pool?: boolean | (() => boolean), gpu?: boolean | (() => boolean),
+ *   hdFast?: boolean | (() => boolean)}} [options]
  *   wasmPaths: where the app serves the WebAssembly runtime both models run
  *   on (see apps/web/scripts/copy-runtime.js). modelPaths: where it serves the Swift weights,
  *   tried before the internet (apps/web/scripts/fetch-model.js); null to
@@ -138,10 +139,13 @@ export function swiftGpuPlanned() {
  *   `swiftThreads`). pool: false to speak Swift on one worker only; by
  *   default helpers are used where `swiftPool` allows. gpu: false to never
  *   use the GPU helper; by default it is used where `swiftGpuPlanned`
- *   allows. A function is asked when Swift first loads, not when the engine
- *   is made.
+ *   allows. hdFast: false to run HD as Kokoro whole; by default HD runs as
+ *   HD-Fast where `modelPaths` serves its files (see `loadKokoro`). A
+ *   function is asked when its model first loads, not when the engine is made.
  */
-export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', threads, pool = true, gpu = true } = {}) {
+export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', threads, pool = true, gpu = true, hdFast = true } = {}) {
+  /** How HD runs once loaded: 'fast' (HD-Fast) or 'whole' (Kokoro whole). */
+  let hdVariant = 'whole';
   // Decided when Swift first loads. With a GPU helper planned, the CPU worker
   // leaves two threads for it to drive the GPU with.
   let gpuPlanned = false;
@@ -260,6 +264,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
           else pj?.reject(data.message);
           return;
         }
+        if (data.type === 'variant') { hdVariant = data.variant; return; }
         const job = pending.get(data.id);
         if (data.type === 'chunk') job?.onChunk(data.samples);
         else if (data.type === 'done') { pending.delete(data.id); job?.resolve(!!data.cancelled); }
@@ -291,6 +296,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
         wasmPaths: new URL(wasmPaths, location.href).href,
         modelPaths: modelPaths ? new URL(modelPaths, location.href).href : null,
         threads: id === 'swift' ? cpuWorkerThreads : threads ?? swiftThreads(),
+        fast: id === 'hd' && (typeof hdFast === 'function' ? hdFast() : hdFast),
       });
       return rt.loading;
     },
@@ -303,7 +309,12 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
      * @param {ModelId} id
      */
     async onDevice(id) {
-      if (id === 'hd') return isCached(HD_MODEL);
+      if (id === 'hd') {
+        if (await isCached(HD_MODEL)) return true;
+        if (!modelPaths) return false;
+        const fast = await Promise.all(Object.values(HDFAST_FILES).map((f) => isCached(new URL(f, new URL(modelPaths, location.href)).href)));
+        return fast.every(Boolean);
+      }
       const hits = await Promise.all(SWIFT_FILES.map(isCached));
       return hits.every(Boolean);
     },
@@ -350,7 +361,16 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
         voice: model.id === 'swift' ? { speaker: voice.speaker } : { lang: voice.lang, mix: voice.mix },
         speed: settings.speed ?? 1,
       });
-      const cancelled = await done;
+      // HD speaking is not quiet either: Swift's helpers loading beside it made
+      // HD-Fast 3–5× slower (RTF 0.48–0.85 against 0.12–0.17, .cache/hd-bench).
+      speaking++;
+      let cancelled;
+      try {
+        cancelled = await done;
+      } finally {
+        speaking--;
+        quietSince = performance.now();
+      }
       signal?.removeEventListener('abort', abort);
       if (cancelled) return null;
       const samples = concat(chunks);
@@ -359,7 +379,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
       return {
         samples,
         sampleRate: model.sampleRate,
-        stats: { backend: `wasm-simd · ${threads ?? swiftThreads()} thread${(threads ?? swiftThreads()) === 1 ? '' : 's'}`, model: model.name, seconds, elapsedMs, ttfaMs, rtf: seconds ? elapsedMs / 1000 / seconds : 0 },
+        stats: { backend: `${hdVariant === 'fast' ? 'HD-Fast · ' : ''}wasm-simd · ${threads ?? swiftThreads()} thread${(threads ?? swiftThreads()) === 1 ? '' : 's'}`, model: model.name, seconds, elapsedMs, ttfaMs, rtf: seconds ? elapsedMs / 1000 / seconds : 0 },
       };
     },
 
@@ -427,7 +447,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
     },
   };
 
-  /** Run `fn` once Swift has been idle for two seconds. */
+  /** Run `fn` once nothing has been spoken for two seconds. */
   function whenQuiet(/** @type {() => void} */ fn) {
     if (!gpuPlanned && !helpersPlanned) return;
     quietSince = quietSince || performance.now();

@@ -5,7 +5,7 @@ import { kokoroPhonemes, loadLexicon } from '/packages/cadence/src/g2p.js';
 
 const DIST = '/packages/cadence/node_modules/onnxruntime-web/dist/';
 const MODEL = '/.cache/models/kokoro/';
-let ort, session, vocab, table;
+let ort, session, back, vocab, table;
 
 self.onmessage = async ({ data }) => {
   try { await handle(data); } catch (e) { self.postMessage({ type: 'error', message: String(e?.message ?? e).slice(0, 300) }); }
@@ -20,7 +20,7 @@ async function handle(data) {
     ort.env.logLevel = 'error';
     const [tok, model, voice] = await Promise.all([
       fetch(`${MODEL}tokenizer.json`).then((r) => r.json()),
-      fetch(`${MODEL}${data.file ?? 'model.onnx'}`).then((r) => r.arrayBuffer()),
+      fetch(data.fast ? '/.cache/hdfast/onnx/kokoro-front.onnx' : `${MODEL}${data.file ?? 'model.onnx'}`).then((r) => r.arrayBuffer()),
       fetch(`${MODEL}af_heart.bin`).then((r) => r.arrayBuffer()),
       loadLexicon(),
     ]);
@@ -30,6 +30,11 @@ async function handle(data) {
       executionProviders: [data.ep === 'webgpu' ? 'webgpu' : 'wasm'],
       graphOptimizationLevel: 'all',
     });
+    // HD-Fast (tools/hdfast): Kokoro's front half, then HD-Fast's back half.
+    if (data.fast) {
+      const b = await (await fetch('/.cache/hdfast/onnx/hdfast-back.onnx')).arrayBuffer();
+      back = await ort.InferenceSession.create(new Uint8Array(b), { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+    }
     await speak('Ready.');
     self.postMessage({ type: 'ready', inputs: session.inputNames, outputs: session.outputNames });
   } else if (data.type === 'speak') {
@@ -46,10 +51,12 @@ async function speak(text) {
   const phonemes = kokoroPhonemes(text, 'a');
   const ids = [0, ...[...phonemes].map((c) => vocab[c]).filter((v) => v !== undefined), 0];
   const row = 256 * Math.min(Math.max(ids.length - 2, 0), 509);
+  const style = new ort.Tensor('float32', table.slice(row, row + 256), [1, 256]);
   const out = await session.run({
     input_ids: new ort.Tensor('int64', BigInt64Array.from(ids.map(BigInt)), [1, ids.length]),
-    style: new ort.Tensor('float32', table.slice(row, row + 256), [1, 256]),
+    style,
     speed: new ort.Tensor('float32', new Float32Array([1]), [1]),
   });
+  if (back) return (await back.run({ asr: out.asr, f0: out.f0, n: out.n, style })).waveform.data;
   return out[session.outputNames[0]].data;
 }

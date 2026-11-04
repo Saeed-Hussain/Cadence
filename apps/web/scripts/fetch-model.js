@@ -37,3 +37,17 @@ try {
   // No network on a first run: the app still works, loading from the internet later.
   console.warn(`Model not fetched (${/** @type {Error} */ (e).message}); the browser will download it on first use.`);
 }
+
+// HD-Fast's files, where they have been built (tools/hdfast): HD runs as
+// HD-Fast when the app serves them, as Kokoro whole when it does not.
+const FAST = fileURLToPath(new URL('../../../.cache/hdfast/onnx/', import.meta.url));
+const files = ['kokoro-front.onnx', 'hdfast-back.onnx'];
+if (files.every((f) => existsSync(join(FAST, f)))) {
+  await mkdir(join(OUT, 'hdfast'), { recursive: true });
+  for (const f of files) {
+    const src = join(FAST, f);
+    const dst = join(OUT, 'hdfast', f);
+    if (!existsSync(dst) || (await stat(dst)).size !== (await stat(src)).size) await copyFile(src, dst);
+  }
+  console.log('HD-Fast ready in public/models/hdfast/');
+}
