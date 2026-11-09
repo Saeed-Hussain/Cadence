@@ -55,12 +55,18 @@ The student runs in Swift's worker pool (see `swiftPool` in the engine).
    the features, MelNet, Vocos and an inverse STFT written out in the graph.
    It is checked against PyTorch. The front half is cut from Kokoro's ONNX at
    its decoder inputs (asr, F0 and N).
-5. `node tools/hdfast/bench.js` compares the result with Kokoro whole on this
-   machine: 8× faster on a Ryzen 5 7430U. In the app, HD runs as HD-Fast when
-   `public/models/hdfast/` holds both files (`apps/web/scripts/fetch-model.js`
-   copies them in), and as Kokoro whole otherwise, or with `?hd=whole`.
-   Still to do: a worker pool for long texts, public hosting, and the blind
-   A/B test against Cadence HD.
+5. `kaggle/quantize/quantize.py` quantizes the back half to 8 bits: 38 MB,
+   1.55× faster in WebAssembly, and it sounds the same. The front half breaks
+   in 8 bits, even with only ALBERT quantized, so it stays float32.
+6. `node tools/hdfast/bench.js` compares the result with Kokoro whole on this
+   machine: 8× faster on a Ryzen 5 7430U.
+   - In the app, HD runs as HD-Fast when `public/models/hdfast/` holds both
+     files (`apps/web/scripts/fetch-model.js` copies them in). Otherwise it
+     runs as Kokoro whole, as it also does with `?hd=whole`.
+   - The two halves run on separate threads, so consecutive pieces overlap.
+   - A 100-sentence paragraph takes 36–40 s once warm.
+   - A pool of whole HD-Fast workers was slower in the app; see `speakPool`.
+   - Still to do: public hosting and the blind A/B test against Cadence HD.
 
 Run a job with `python -m kaggle kernels push -p tools/hdfast/kaggle/<job>`. This
 needs a Kaggle API token in `~/.kaggle/access_token`.

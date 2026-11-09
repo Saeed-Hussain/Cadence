@@ -15,7 +15,7 @@
 
 import { estimatePitch } from './dsp.js';
 import { isCached } from './download.js';
-import { chunks as planPieces } from './piper.js';
+import { HD_PIECES, chunks as planPieces } from './piper.js';
 import { PREVIEW_TEXT, VOICES, matchPitch } from './voices.js';
 import { HD_MODEL, HDFAST_FILES, SWIFT_FILES } from './weights.js';
 
@@ -51,7 +51,7 @@ export const MODELS = /** @type {const} */ ([
     name: 'Cadence HD',
     tagline: 'Highest quality · fast',
     description: 'Kokoro-82M, with HD-Fast in place of its decoder: the most natural voices, about eight times faster than Kokoro whole.',
-    weights: 'Kokoro-82M front half + HD-Fast · 219 MB',
+    weights: 'Kokoro-82M front half + HD-Fast · 150 MB',
     sampleRate: 24000,
   },
 ]);
@@ -186,8 +186,6 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
     hd: { state: { status: 'idle', progress: 0, phase: 'download', error: '' }, worker: null, loading: null },
   };
   let nextId = 1;
-  /** @type {Map<number, {worker: Worker, onChunk: (s: Float32Array) => void, resolve: (cancelled: boolean) => void, reject: (e: Error) => void}>} */
-  const pending = new Map();
   /** @type {Set<(states: Record<ModelId, ModelState>) => void>} */
   const listeners = new Set();
   /** @type {Map<string, Promise<Float32Array>>} */
@@ -228,6 +226,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
       const rt = runtimes[id];
       if (rt.loading) return rt.loading;
       if (id === 'swift') plan();
+      const fast = id === 'hd' && (typeof hdFast === 'function' ? hdFast() : hdFast);
       update(id, { status: 'loading', progress: 0, phase: 'download', error: '' });
       const w = spawn(id);
       rt.worker = w;
@@ -238,9 +237,6 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
         w.terminate();
         rt.worker = null;
         rt.loading = null;
-        for (const [jobId, job] of pending) {
-          if (job.worker === w) { pending.delete(jobId); job.reject(new Error(message)); }
-        }
         for (const [key, job] of pieceJobs) {
           if (job.worker === w) { pieceJobs.delete(key); job.reject(message); }
         }
@@ -264,11 +260,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
           else pj?.reject(data.message);
           return;
         }
-        if (data.type === 'variant') { hdVariant = data.variant; return; }
-        const job = pending.get(data.id);
-        if (data.type === 'chunk') job?.onChunk(data.samples);
-        else if (data.type === 'done') { pending.delete(data.id); job?.resolve(!!data.cancelled); }
-        else if (data.type === 'failed') { pending.delete(data.id); job?.reject(new Error(data.message)); }
+        if (data.type === 'variant') hdVariant = data.variant;
       });
       rt.loading = new Promise((resolve, reject) => {
         failLoad = (e) => { failLoad = null; reject(e); };
@@ -278,7 +270,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
             failLoad = null;
             update(id, { status: 'ready', progress: 1 });
             resolve();
-            if (id === 'swift') whenQuiet(() => { startCpuHelpers(); startGpuHelper(); });
+            if (id === 'swift' && (gpuPlanned || helpersPlanned)) whenQuiet(() => { startCpuHelpers(); startGpuHelper(); });
           } else if (data.type === 'error') {
             w.removeEventListener('message', onReady);
             failLoad = null;
@@ -296,7 +288,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
         wasmPaths: new URL(wasmPaths, location.href).href,
         modelPaths: modelPaths ? new URL(modelPaths, location.href).href : null,
         threads: id === 'swift' ? cpuWorkerThreads : threads ?? swiftThreads(),
-        fast: id === 'hd' && (typeof hdFast === 'function' ? hdFast() : hdFast),
+        fast,
       });
       return rt.loading;
     },
@@ -332,55 +324,7 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
       const voice = resolveVoice(wanted);
       const model = MODELS.find((m) => m.id === voice.model) ?? MODELS[0];
       await engine.load(model.id);
-      if (model.id === 'swift') return speakSwift(text, voice, settings.speed ?? 1, onChunk, signal);
-      const w = /** @type {Worker} */ (runtimes[model.id].worker);
-      const id = nextId++;
-      const start = performance.now();
-      let ttfaMs = 0;
-      /** @type {Float32Array[]} */
-      const chunks = [];
-      const done = new Promise((resolve, reject) => {
-        pending.set(id, {
-          worker: w,
-          onChunk: (s) => {
-            if (!ttfaMs) ttfaMs = performance.now() - start;
-            chunks.push(s);
-            onChunk?.(s);
-          },
-          resolve,
-          reject,
-        });
-      });
-      const abort = () => w.postMessage({ type: 'cancel', id });
-      if (signal?.aborted) abort();
-      signal?.addEventListener('abort', abort, { once: true });
-      w.postMessage({
-        type: 'generate',
-        id,
-        text,
-        voice: model.id === 'swift' ? { speaker: voice.speaker } : { lang: voice.lang, mix: voice.mix },
-        speed: settings.speed ?? 1,
-      });
-      // HD speaking is not quiet either: Swift's helpers loading beside it made
-      // HD-Fast 3–5× slower (RTF 0.48–0.85 against 0.12–0.17, .cache/hd-bench).
-      speaking++;
-      let cancelled;
-      try {
-        cancelled = await done;
-      } finally {
-        speaking--;
-        quietSince = performance.now();
-      }
-      signal?.removeEventListener('abort', abort);
-      if (cancelled) return null;
-      const samples = concat(chunks);
-      const elapsedMs = performance.now() - start;
-      const seconds = samples.length / model.sampleRate;
-      return {
-        samples,
-        sampleRate: model.sampleRate,
-        stats: { backend: `${hdVariant === 'fast' ? 'HD-Fast · ' : ''}wasm-simd · ${threads ?? swiftThreads()} thread${(threads ?? swiftThreads()) === 1 ? '' : 's'}`, model: model.name, seconds, elapsedMs, ttfaMs, rtf: seconds ? elapsedMs / 1000 / seconds : 0 },
-      };
+      return speakPool(model.id, text, voice, settings.speed ?? 1, onChunk, signal);
     },
 
     /**
@@ -449,7 +393,6 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
 
   /** Run `fn` once nothing has been spoken for two seconds. */
   function whenQuiet(/** @type {() => void} */ fn) {
-    if (!gpuPlanned && !helpersPlanned) return;
     quietSince = quietSince || performance.now();
     const check = () => {
       if (!speaking && performance.now() - quietSince >= 2000) fn();
@@ -541,26 +484,38 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
   }
 
   /**
-   * Swift, piece by piece over every worker it has. The first piece goes to
+   * A model, piece by piece over every worker it has. The first piece goes to
    * the main worker alone, so first audio is as quick as it can be; after it,
    * each free worker takes the next piece. Audio is handed on strictly in
    * order. A piece a helper drops goes back in the queue.
    *
-   * @param {string} text @param {Voice} voice @param {number} speed
+   * @param {ModelId} modelId @param {string} text @param {Voice} voice @param {number} speed
    * @param {((s: Float32Array) => void) | undefined} onChunk @param {AbortSignal | undefined} signal
    * @returns {Promise<Synthesis | null>}
    */
-  function speakSwift(text, voice, speed, onChunk, signal) {
-    const model = MODELS[0];
-    const cpu = /** @type {Worker} */ (runtimes.swift.worker);
-    const pieces = planPieces(text);
+  function speakPool(modelId, text, voice, speed, onChunk, signal) {
+    const swift = modelId === 'swift';
+    const model = /** @type {(typeof MODELS)[number]} */ (MODELS.find((m) => m.id === modelId));
+    const cpu = /** @type {Worker} */ (runtimes[modelId].worker);
+    // HD has one worker. HD-Fast with a second of the same (two of 6 threads,
+    // Ryzen 5 7430U) was 12% faster in a bare page but slower in the app,
+    // RTF 0.22–0.31 against 0.15–0.16: each holds about 600 MB.
+    const workers = () => (swift ? [cpu, ...cpuHelpers, helper.worker] : [cpu]);
+    const pieces = swift ? planPieces(text) : planPieces(text, HD_PIECES);
+    const what = swift ? { speaker: voice.speaker } : { voice: { lang: voice.lang, mix: voice.mix } };
+    const mainThreads = swift ? cpuWorkerThreads : threads ?? swiftThreads();
     const id = nextId++;
     const start = performance.now();
     /** @type {(Float32Array | undefined)[]} */
     const results = new Array(pieces.length);
     /** @type {number[]} */
     const retry = [];
-    const busy = new Set();
+    /** Pieces in flight on each worker. @type {Map<Worker, number>} */
+    const busy = new Map();
+    // HD's worker overlaps the two halves of consecutive pieces (worker-hd.js):
+    // it is kept two pieces ahead.
+    const depth = swift ? 1 : 2;
+    const done = (/** @type {Worker} */ w) => busy.set(w, (busy.get(w) ?? 1) - 1);
     let next = 0;
     let emitted = 0;
     let ttfaMs = 0;
@@ -593,40 +548,41 @@ export function createEngine({ wasmPaths = '/ort/', modelPaths = '/models/', thr
           const samples = concat(/** @type {Float32Array[]} */ (results));
           const elapsedMs = performance.now() - start;
           const seconds = samples.length / model.sampleRate;
-          const backend = `wasm-simd · ${cpuWorkerThreads} thread${cpuWorkerThreads === 1 ? '' : 's'}${usedHelpers.size ? ` + ${usedHelpers.size} × ${helperThreads}` : ''}${usedGpu ? ' + WebGPU' : ''}`;
+          const backend = `${!swift && hdVariant === 'fast' ? 'HD-Fast · ' : ''}wasm-simd · ${mainThreads} thread${mainThreads === 1 ? '' : 's'}${usedHelpers.size ? ` + ${usedHelpers.size} × ${helperThreads}` : ''}${usedGpu ? ' + WebGPU' : ''}`;
           finish({ samples, sampleRate: model.sampleRate, stats: { backend, model: model.name, seconds, elapsedMs, ttfaMs, rtf: seconds ? elapsedMs / 1000 / seconds : 0 } });
         }
       };
 
       const send = (/** @type {Worker} */ w, /** @type {number} */ index) => {
-        busy.add(w);
+        busy.set(w, (busy.get(w) ?? 0) + 1);
         if (w === helper.worker) usedGpu = true;
         else if (w !== cpu) usedHelpers.add(w);
         pieceJobs.set(`${id}:${index}`, {
           worker: w,
-          resolve: (s) => { busy.delete(w); if (over) return; results[index] = s; flush(); dispatch(); },
+          resolve: (s) => { done(w); if (over) return; results[index] = s; flush(); dispatch(); },
           reject: (message) => {
-            busy.delete(w);
+            done(w);
             if (over) return;
             if (w === cpu) finish(null, [new Error(message)]);
             else { retry.unshift(index); dispatch(); }
           },
         });
-        w.postMessage({ type: 'piece', id, index, text: pieces[index], speaker: voice.speaker, speed });
+        w.postMessage({ type: 'piece', id, index, text: pieces[index], ...what, speed });
       };
 
       function dispatch() {
         if (over) return;
-        for (const w of [cpu, ...cpuHelpers, helper.worker]) {
-          if (!w || busy.has(w)) continue;
-          // Nothing runs beside the first piece: it is the one being waited for.
-          if (!results[0] && (next > 0 || w !== cpu) && !retry.includes(0)) return;
-          // Helpers are slower per piece than the main worker: they take work
-          // only while enough remains, so the main worker finishes the tail.
-          if (w !== cpu && pieces.length - next < (w === helper.worker ? 3 : 2) && !retry.length) continue;
-          const index = retry.length ? /** @type {number} */ (retry.shift()) : next < pieces.length ? next++ : -1;
-          if (index < 0) return;
-          send(w, index);
+        for (const w of workers()) {
+          while (w && (busy.get(w) ?? 0) < depth) {
+            // Nothing runs beside the first piece: it is the one being waited for.
+            if (!results[0] && (next > 0 || w !== cpu) && !retry.includes(0)) return;
+            // Helpers are slower per piece than the main worker: they take work
+            // only while enough remains, so the main worker finishes the tail.
+            if (w !== cpu && pieces.length - next < (w === helper.worker ? 3 : 2) && !retry.length) break;
+            const index = retry.length ? /** @type {number} */ (retry.shift()) : next < pieces.length ? next++ : -1;
+            if (index < 0) return;
+            send(w, index);
+          }
         }
       }
       dispatch();

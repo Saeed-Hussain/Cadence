@@ -19,15 +19,9 @@
 
 import { KOKORO_VOCAB } from './data/kokoro-vocab.js';
 import { kokoroPhonemes, loadLexicon } from './g2p.js';
-import { chunks } from './piper.js';
 
 export const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 export const SAMPLE_RATE = 24000;
-/**
- * The first piece is kept short, because it is the one being waited for:
- * 30 characters made first audio 1.6 s instead of 2.2 s (tools/bench/hd).
- */
-const PIECES = { first: 30 };
 const VOICE_URL = (name) => `https://huggingface.co/${MODEL_ID}/resolve/main/voices/${name}.bin`;
 const STYLE = 256;
 
@@ -111,16 +105,29 @@ export function embedding(spec) {
  * passage on a Ryzen 5 7430U, four threads: 26 s whole, 3.1 s as HD-Fast;
  * first audio 3.6 s and 0.45 s (tools/hdfast/bench.js).
  *
- * @param {{ort: typeof import('onnxruntime-web'), model?: Uint8Array, fast?: {front: Uint8Array, back: Uint8Array},
+ * The back half can run elsewhere (`fast.back` a function, as the HD worker
+ * does with a thread of its own): then the front half of one piece runs
+ * while the back half of the piece before it does.
+ *
+ * @typedef {Record<'asr' | 'f0' | 'n' | 'style', import('onnxruntime-web').Tensor>} BackInputs
+ * @param {{ort: typeof import('onnxruntime-web'), model?: Uint8Array,
+ *   fast?: {front: Uint8Array, back: Uint8Array | ((inputs: BackInputs) => Promise<Float32Array>)},
  *   sessionOptions?: import('onnxruntime-web').InferenceSession.SessionOptions}} options
  */
 export async function loadKokoro({ ort, model, fast, sessionOptions = { executionProviders: ['wasm'], graphOptimizationLevel: 'all' } }) {
   const create = (/** @type {Uint8Array} */ m) => ort.InferenceSession.create(m, sessionOptions);
+  const local = fast && !(typeof fast.back === 'function');
   const [sessions] = await Promise.all([
-    fast ? Promise.all([create(fast.front), create(fast.back)]) : Promise.all([create(/** @type {Uint8Array} */ (model))]),
+    Promise.all(fast ? [create(fast.front), ...(local ? [create(/** @type {Uint8Array} */ (fast.back))] : [])] : [create(/** @type {Uint8Array} */ (model))]),
     loadLexicon(),
   ]);
-  const [session, back] = sessions;
+  const [session, backSession] = sessions;
+  /** @type {((inputs: BackInputs) => Promise<Float32Array>) | null} */
+  const back = !fast ? null : backSession
+    ? async (inputs) => /** @type {Float32Array} */ ((await backSession.run(inputs)).waveform.data)
+    : /** @type {(inputs: BackInputs) => Promise<Float32Array>} */ (fast.back);
+  // A session runs one inference at a time: pieces take turns at the front half.
+  let turn = Promise.resolve();
 
   /** @param {number[]} ids @param {Float32Array} style @param {number} speed */
   const run = async (ids, style, speed) => {
@@ -129,10 +136,11 @@ export async function loadKokoro({ ort, model, fast, sessionOptions = { executio
       style: new ort.Tensor('float32', style, [1, STYLE]),
       speed: new ort.Tensor('float32', new Float32Array([speed]), [1]),
     };
-    const out = await session.run(inputs);
+    const mine = turn.then(() => session.run(inputs));
+    turn = mine.then(() => {}, () => {});
+    const out = await mine;
     if (!back) return /** @type {Float32Array} */ (out.waveform.data);
-    const sound = await back.run({ asr: out.asr, f0: out.f0, n: out.n, style: inputs.style });
-    return /** @type {Float32Array} */ (sound.waveform.data);
+    return back({ asr: out.asr, f0: out.f0, n: out.n, style: inputs.style });
   };
 
   /** @param {string} phonemes @param {VoiceSpec} voice @param {number} speed */
@@ -149,23 +157,21 @@ export async function loadKokoro({ ort, model, fast, sessionOptions = { executio
 
   // One short inference now, so the first one asked for does not also pay
   // for the runtime's first-call setup. A blank style: no voice to fetch.
-  await run([0, KOKORO_VOCAB['ɹ'], KOKORO_VOCAB['ˈ'], KOKORO_VOCAB['ɛ'], KOKORO_VOCAB['d'], KOKORO_VOCAB['i'], KOKORO_VOCAB['.'], 0], new Float32Array(STYLE), 1);
+  const ready = [KOKORO_VOCAB['ɹ'], KOKORO_VOCAB['ˈ'], KOKORO_VOCAB['ɛ'], KOKORO_VOCAB['d'], KOKORO_VOCAB['i'], KOKORO_VOCAB['.']];
+  await run([0, ...ready, 0], new Float32Array(STYLE), 1);
+  // And one as long as the longest piece, so the runtime has grown its
+  // memory to that size before a paragraph needs it.
+  await run([0, ...Array(40).fill(ready).flat(), 0], new Float32Array(STYLE), 1);
 
   return {
     /**
-     * Synthesise piece by piece (see `chunks`), handing each over as soon as
-     * it exists — the first one is the time to first audio.
+     * One piece of a text (`chunks` with `HD_PIECES`), trimmed, with the
+     * pause its punctuation asks for after it.
      *
-     * @param {string} text
-     * @param {VoiceSpec} voice
-     * @param {number} speed
-     * @param {(samples: Float32Array, piece: string) => void} onChunk
+     * @param {string} piece @param {VoiceSpec} voice @param {number} speed
      */
-    async generate(text, voice, speed, onChunk) {
-      for (const piece of chunks(text, PIECES)) {
-        const audio = await speak(kokoroPhonemes(piece, voice.lang), voice, speed);
-        onChunk(trim(audio, piece, speed), piece);
-      }
+    async piece(piece, voice, speed) {
+      return trim(await speak(kokoroPhonemes(piece, voice.lang), voice, speed), piece, speed);
     },
   };
 }
