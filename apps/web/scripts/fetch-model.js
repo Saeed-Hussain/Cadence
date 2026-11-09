@@ -41,7 +41,7 @@ try {
 // HD-Fast's files, where they have been built (tools/hdfast): HD runs as
 // HD-Fast when the app serves them, as Kokoro whole when it does not.
 const FAST = fileURLToPath(new URL('../../../.cache/hdfast/onnx/', import.meta.url));
-const files = ['kokoro-front.onnx', 'hdfast-back.onnx'];
+const files = ['kokoro-front.onnx', 'hdfast-back-q8.onnx'];
 if (files.every((f) => existsSync(join(FAST, f)))) {
   await mkdir(join(OUT, 'hdfast'), { recursive: true });
   for (const f of files) {

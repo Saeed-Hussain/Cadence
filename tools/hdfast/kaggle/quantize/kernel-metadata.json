@@ -1,0 +1,1 @@
+{"id": "saeedhussain56/cadence-hdfast-quantize", "title": "cadence-hdfast-quantize", "code_file": "quantize.py", "language": "python", "kernel_type": "script", "is_private": true, "enable_gpu": false, "enable_internet": true, "dataset_sources": ["saeedhussain56/cadence-hdfast-text"], "competition_sources": [], "kernel_sources": ["saeedhussain56/cadence-hdfast-export"]}

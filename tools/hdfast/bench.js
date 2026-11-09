@@ -3,10 +3,11 @@
  * piece, through Kokoro whole and through Kokoro's front half plus HD-Fast's
  * back half, on onnxruntime-web (WebAssembly, as in the app).
  *
- *   node tools/hdfast/bench.js [threads=4] [voice=af_heart]
+ *   node tools/hdfast/bench.js [threads=4] [voice=af_heart] [back=hdfast-back-q8.onnx]
  *
- * Reads .cache/models/kokoro/model.onnx and .cache/hdfast/onnx/{kokoro-front,
- * hdfast-back}.onnx; writes both readings to output/hdfast/bench/.
+ * Reads .cache/models/kokoro/model.onnx and .cache/hdfast/onnx/kokoro-front.onnx
+ * plus the back half (by default the 8-bit one the app uses; back=hdfast-back.onnx
+ * for float32); writes both readings to output/hdfast/bench/.
  */
 
 import { existsSync } from 'node:fs';
@@ -47,7 +48,7 @@ const table = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
 const open = async (/** @type {string} */ f) => ort.InferenceSession.create(await readFile(join(ROOT, f)), { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
 const whole = await open('.cache/models/kokoro/model.onnx');
 const front = await open('.cache/hdfast/onnx/kokoro-front.onnx');
-const back = await open('.cache/hdfast/onnx/hdfast-back.onnx');
+const back = await open(`.cache/hdfast/onnx/${args.back ?? 'hdfast-back-q8.onnx'}`);
 
 const inputs = (/** @type {string} */ phonemes) => {
   const ids = [0];
@@ -86,7 +87,7 @@ for (const [name, run] of /** @type {const} */ ([['hd', hd], ['fast', fast]])) {
   }
   const all = new Float32Array(audio.reduce((n, a) => n + a.length, 0));
   audio.reduce((o, a) => (all.set(a, o), o + a.length), 0);
-  await writeFile(join(OUT, `${name}-${voice}.wav`), wav(all));
+  await writeFile(join(OUT, `${name}-${voice}${name === 'fast' && args.back ? `-${args.back.replace('.onnx', '')}` : ''}.wav`), wav(all));
   result[name] = { seconds: all.length / SR, took: took / 1000, first: first / 1000 };
   console.log(`${name.padEnd(4)}  ${(all.length / SR).toFixed(1)} s of speech in ${(took / 1000).toFixed(1)} s  ·  ${(took / 1000 / (all.length / SR)).toFixed(3)} of real time  ·  first piece ${(first / 1000).toFixed(2)} s`);
 }

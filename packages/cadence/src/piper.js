@@ -145,3 +145,10 @@ export function chunks(text, { first = 60, growth = 1.6, max = 260 } = {}) {
   }
   return out;
 }
+
+/**
+ * HD's caps for `chunks`. Its first piece is kept shorter, because it is the
+ * one being waited for: 30 characters made first audio 1.6 s instead of 2.2 s
+ * with Kokoro whole (tools/bench/hd).
+ */
+export const HD_PIECES = { first: 30 };
